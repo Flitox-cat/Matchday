@@ -19,7 +19,8 @@ data class WeatherInfo(
 /** Kick-off weather from Open-Meteo (free, no API key). Forecasts reach ~7 days ahead. */
 class WeatherRepository(private val cache: JsonCache) {
 
-    suspend fun atKickoff(city: String, kickoff: Long): WeatherInfo? = try {
+    suspend fun atKickoff(city: String, kickoff: Long): WeatherInfo? {
+        return try {
         val geo = cache.get("geo:$city", 30L * 24 * 3_600_000, GeoResponse.serializer()) {
             Network.geocoding.search(city)
         }.results?.firstOrNull() ?: return null
@@ -43,6 +44,7 @@ class WeatherRepository(private val cache: JsonCache) {
         )
     } catch (_: Exception) {
         null
+    }
     }
 
     private fun describe(code: Int?): String = when (code) {
