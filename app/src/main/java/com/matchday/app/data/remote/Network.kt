@@ -21,6 +21,9 @@ object Network {
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().header("User-Agent", "Matchday-Android/2.0").build())
+            }
             .addInterceptor(logging)
             .build()
     }
@@ -31,9 +34,7 @@ object Network {
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
 
-    val oddsApi: OddsApiService by lazy { retrofit("https://api.the-odds-api.com/").create(OddsApiService::class.java) }
-    val footballData: FootballDataService by lazy { retrofit("https://api.football-data.org/").create(FootballDataService::class.java) }
-    val apiFootball: ApiFootballService by lazy { retrofit("https://v3.football.api-sports.io/").create(ApiFootballService::class.java) }
+    val espn: EspnService by lazy { retrofit("https://site.api.espn.com/").create(EspnService::class.java) }
     val geocoding: GeocodingService by lazy { retrofit("https://geocoding-api.open-meteo.com/").create(GeocodingService::class.java) }
     val weather: WeatherService by lazy { retrofit("https://api.open-meteo.com/").create(WeatherService::class.java) }
 }

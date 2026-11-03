@@ -21,13 +21,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Optional: add repository secrets with these names to bake keys into the APK.
-      # Leaving them empty is fine - keys can be entered in the app's Settings screen.
       - name: Build debug APK
-        env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace

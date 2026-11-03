@@ -52,8 +52,7 @@ fun HomeScreen(vm: HomeViewModel, onMatch: (String) -> Unit, onSettings: () -> U
                 Column {
                     Text("Matchday", style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Updated ${Formats.ago(s.lastRefresh)}" +
-                            if (s.quotaRemaining >= 0) " · ${s.quotaRemaining} odds credits left" else "",
+                        "Updated ${Formats.ago(s.lastRefresh)} · free public data, no account needed",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -69,14 +68,6 @@ fun HomeScreen(vm: HomeViewModel, onMatch: (String) -> Unit, onSettings: () -> U
             LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
                 item { Filters(state, vm) }
 
-                if (s.effectiveOddsKey.isBlank()) {
-                    item {
-                        Banner(
-                            "Add a free The Odds API key in Settings to load fixtures and bookmaker odds. Tap to open Settings.",
-                            color = Accent.Blue, onClick = onSettings,
-                        )
-                    }
-                }
                 messages.forEach { m -> item { Banner(m) } }
 
                 section("Live now", Accent.Live, state.live, onMatch)
@@ -87,7 +78,7 @@ fun HomeScreen(vm: HomeViewModel, onMatch: (String) -> Unit, onSettings: () -> U
 
                 val nothing = state.live.isEmpty() && state.today.isEmpty() && state.tomorrow.isEmpty() &&
                     state.upcomingPopular.isEmpty() && state.completed.isEmpty()
-                if (nothing && state.loadedOnce && s.effectiveOddsKey.isNotBlank()) {
+                if (nothing && state.loadedOnce) {
                     item {
                         EmptyState(
                             "No matches found",

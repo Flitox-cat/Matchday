@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
-import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
@@ -13,43 +12,50 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
 
-@Entity(tableName = "events")
-data class EventEntity(
-    @PrimaryKey val id: String,
-    val sportKey: String,
-    val sportTitle: String,
-    val homeTeam: String,
-    val awayTeam: String,
-    val commenceTime: Long,
-    val oddsUpdatedAt: Long,
+/**
+ * Bookmaker prices for one match, decimal odds. "open" = price when the market opened,
+ * "close" = current price. Stored as JSON inside [MatchEntity].
+ */
+@Serializable
+data class OddsSnap(
+    val provider: String,
+    val homeOpen: Double? = null, val homeClose: Double? = null,
+    val drawOpen: Double? = null, val drawClose: Double? = null,
+    val awayOpen: Double? = null, val awayClose: Double? = null,
+    val totalLine: Double? = null,
+    val overOpen: Double? = null, val overClose: Double? = null,
+    val underOpen: Double? = null, val underClose: Double? = null,
+    val spreadHomeLine: String? = null, val spreadHomeOdds: Double? = null,
+    val spreadAwayLine: String? = null, val spreadAwayOdds: Double? = null,
+    val fetchedAt: Long = 0,
 )
 
-@Entity(tableName = "odds", indices = [Index("eventId"), Index("fetchedAt")])
-data class OddsEntity(
-    @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
-    val eventId: String,
-    val bookmakerKey: String,
-    val bookmakerTitle: String,
-    val market: String,
-    val outcome: String,
-    val point: Double?,
-    val price: Double,
-    val bookUpdatedAt: Long,
-    val fetchedAt: Long,
-)
-
-@Entity(tableName = "scores")
-data class ScoreEntity(
-    @PrimaryKey val eventId: String,
-    val sportKey: String,
-    val sportTitle: String,
+@Entity(tableName = "matches")
+data class MatchEntity(
+    @PrimaryKey val id: String,   // "<sport>-<espn id>"
+    val eventId: String,          // raw ESPN event id (for the summary endpoint)
+    val leagueKey: String,        // e.g. "soccer/eng.1"
+    val leagueLogo: String?,
+    val homeId: String?,
+    val awayId: String?,
     val homeTeam: String,
     val awayTeam: String,
-    val commenceTime: Long,
-    val completed: Boolean,
+    val homeLogo: String?,
+    val awayLogo: String?,
+    val kickoff: Long,
+    val state: String,            // pre | in | post
+    val statusDetail: String?,    // "FT", "45'", "Q3 5:12", "Postponed"...
     val homeScore: String?,
     val awayScore: String?,
+    val homeForm: String?,
+    val awayForm: String?,
+    val homeRecord: String?,
+    val awayRecord: String?,
+    val venue: String?,
+    val city: String?,
+    val oddsJson: String?,
     val updatedAt: Long,
 )
 
@@ -75,74 +81,25 @@ data class NotifiedEntity(
 )
 
 @Dao
-interface EventDao {
-    @Query("SELECT * FROM events WHERE commenceTime >= :since ORDER BY commenceTime")
-    fun observeSince(since: Long): Flow<List<EventEntity>>
+interface MatchDao {
+    @Query("SELECT * FROM matches WHERE kickoff >= :since ORDER BY kickoff")
+    fun observeSince(since: Long): Flow<List<MatchEntity>>
 
-    @Query("SELECT * FROM events WHERE commenceTime >= :since ORDER BY commenceTime")
-    suspend fun since(since: Long): List<EventEntity>
+    @Query("SELECT * FROM matches WHERE kickoff >= :since ORDER BY kickoff")
+    suspend fun since(since: Long): List<MatchEntity>
 
-    @Query("SELECT * FROM events WHERE id = :id")
-    suspend fun byId(id: String): EventEntity?
-
-    @Query("SELECT * FROM events WHERE id = :id")
-    fun observeById(id: String): Flow<EventEntity?>
+    @Query("SELECT * FROM matches WHERE id = :id")
+    suspend fun byId(id: String): MatchEntity?
 
     @Upsert
-    suspend fun upsert(events: List<EventEntity>)
+    suspend fun upsert(rows: List<MatchEntity>)
 
-    @Query("DELETE FROM events WHERE commenceTime < :before")
+    @Query("DELETE FROM matches WHERE kickoff < :before")
     suspend fun deleteBefore(before: Long)
 
-    /** Removes upcoming events of a sport that no longer appear in the latest feed (postponed/removed). */
-    @Query("DELETE FROM events WHERE sportKey = :sportKey AND commenceTime > :now AND id NOT IN (:keep)")
-    suspend fun deleteMissing(sportKey: String, now: Long, keep: List<String>)
-}
-
-@Dao
-interface OddsDao {
-    @Insert
-    suspend fun insertAll(rows: List<OddsEntity>)
-
-    /** Latest snapshot for every event. */
-    @Query(
-        """SELECT * FROM odds WHERE fetchedAt = (
-             SELECT MAX(o2.fetchedAt) FROM odds o2 WHERE o2.eventId = odds.eventId)"""
-    )
-    fun observeLatest(): Flow<List<OddsEntity>>
-
-    @Query(
-        """SELECT * FROM odds WHERE fetchedAt = (
-             SELECT MAX(o2.fetchedAt) FROM odds o2 WHERE o2.eventId = odds.eventId)"""
-    )
-    suspend fun latest(): List<OddsEntity>
-
-    @Query("SELECT * FROM odds WHERE eventId = :eventId ORDER BY fetchedAt DESC")
-    fun observeForEvent(eventId: String): Flow<List<OddsEntity>>
-
-    @Query("SELECT * FROM odds WHERE eventId = :eventId ORDER BY fetchedAt DESC")
-    suspend fun forEvent(eventId: String): List<OddsEntity>
-
-    @Query("DELETE FROM odds WHERE fetchedAt < :before")
-    suspend fun deleteBefore(before: Long)
-}
-
-@Dao
-interface ScoreDao {
-    @Upsert
-    suspend fun upsert(rows: List<ScoreEntity>)
-
-    @Query("SELECT * FROM scores WHERE commenceTime >= :since ORDER BY commenceTime DESC")
-    fun observeSince(since: Long): Flow<List<ScoreEntity>>
-
-    @Query("SELECT * FROM scores WHERE eventId = :id")
-    fun observeById(id: String): Flow<ScoreEntity?>
-
-    @Query("SELECT * FROM scores WHERE eventId = :id")
-    suspend fun byId(id: String): ScoreEntity?
-
-    @Query("DELETE FROM scores WHERE commenceTime < :before")
-    suspend fun deleteBefore(before: Long)
+    /** Removes matches of a league inside a refreshed window that the feed no longer lists. */
+    @Query("DELETE FROM matches WHERE leagueKey = :league AND kickoff BETWEEN :from AND :to AND id NOT IN (:keep)")
+    suspend fun deleteMissing(league: String, from: Long, to: Long, keep: List<String>)
 }
 
 @Dao
@@ -185,17 +142,12 @@ interface NotifiedDao {
 }
 
 @Database(
-    entities = [
-        EventEntity::class, OddsEntity::class, ScoreEntity::class,
-        FavouriteEntity::class, CacheEntity::class, NotifiedEntity::class,
-    ],
-    version = 1,
+    entities = [MatchEntity::class, FavouriteEntity::class, CacheEntity::class, NotifiedEntity::class],
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun events(): EventDao
-    abstract fun odds(): OddsDao
-    abstract fun scores(): ScoreDao
+    abstract fun matches(): MatchDao
     abstract fun favourites(): FavouriteDao
     abstract fun cache(): CacheDao
     abstract fun notified(): NotifiedDao

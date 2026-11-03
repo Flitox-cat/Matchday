@@ -342,7 +342,7 @@ object PredictionEngine {
     }
 
     private fun completeness(isFootball: Boolean, hasMarket: Boolean, quality: Double, injuries: Boolean, books: Int): Double {
-        val bookScore = min(1.0, books / 5.0)
+        val bookScore = if (books > 0) 1.0 else 0.0 // the free feed carries one bookmaker
         return if (isFootball) {
             (if (hasMarket) 0.4 * (0.5 + 0.5 * bookScore) else 0.0) + 0.4 * quality + (if (injuries) 0.2 else 0.0)
         } else {
@@ -356,7 +356,7 @@ object PredictionEngine {
     ): Pair<Confidence, List<String>> {
         val notes = mutableListOf<String>()
         notes += "Likeliest outcome has a ${pct(maxP)} estimated chance."
-        notes += "Data completeness ${pct(completeness)}" + if (books > 0) " ($books bookmakers)." else " (no bookmaker prices)."
+        notes += "Data completeness ${pct(completeness)}" + if (books > 0) " (bookmaker prices available)." else " (no bookmaker prices)."
         if (disagreement != null) {
             notes += if (disagreement <= 0.06) "Model and market agree (max gap ${pct(disagreement)})."
             else "Model and market disagree by up to ${pct(disagreement)}."
@@ -365,7 +365,7 @@ object PredictionEngine {
         val agree = disagreement == null || disagreement <= 0.06
         val roughlyAgree = disagreement == null || disagreement <= 0.12
         val level = when {
-            maxP >= 0.60 && completeness >= 0.70 && agree && books >= 3 -> Confidence.HIGH
+            maxP >= 0.60 && completeness >= 0.70 && agree && books >= 1 -> Confidence.HIGH
             maxP >= 0.45 && completeness >= 0.45 && roughlyAgree -> Confidence.MEDIUM
             else -> Confidence.LOW
         }
@@ -384,7 +384,7 @@ object PredictionEngine {
         val r = mutableListOf<String>()
         if (market != null) {
             val fav = if (market.home >= market.away) home else away
-            r += "Bookmakers make $fav favourite (${pct(max(market.home, market.away))} after removing margin)."
+            r += "The bookmaker makes $fav favourite (${pct(max(market.home, market.away))} after removing margin)."
         }
         val h = inputs?.home
         val a = inputs?.away

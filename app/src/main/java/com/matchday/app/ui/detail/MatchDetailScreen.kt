@@ -52,7 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.matchday.app.data.remote.AfLineup
+import com.matchday.app.domain.LineupInfo
 import com.matchday.app.domain.MarketOdds
 import com.matchday.app.domain.MatchItem
 import com.matchday.app.domain.MatchStatus
@@ -130,7 +130,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
             }
         }
         val prediction = state.extras.prediction ?: item.prediction
-        val odds = state.extras.odds ?: item.odds
+        val odds = item.odds
         LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
             item { Header(item, state) { vm.toggleTeam(it) } }
             when (tab) {
@@ -177,7 +177,7 @@ private fun Header(item: MatchItem, state: DetailUiState, onFav: (String) -> Uni
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (item.status == MatchStatus.LIVE) { LiveDot(); Spacer(Modifier.width(4.dp)) }
                                 Text(
-                                    if (item.status == MatchStatus.LIVE) (item.minute?.let { "$it'" } ?: "LIVE") else "Full time",
+                                    item.statusDetail ?: if (item.status == MatchStatus.LIVE) "LIVE" else "Full time",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (item.status == MatchStatus.LIVE) Accent.Live else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -225,7 +225,7 @@ private fun Overview(item: MatchItem, p: Prediction?, notes: List<String>) {
             InfoCard {
                 Text("No prediction yet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Predictions need bookmaker prices (The Odds API) or team statistics (football-data.org). Neither is available for this match yet.",
+                    "Predictions need bookmaker odds or a league table. Neither is available for this match yet (finished, live or tennis matches have no prediction).",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -356,9 +356,8 @@ private fun OddsTab(item: MatchItem, odds: OddsSummary?, p: Prediction?) {
     }
     Column {
         Banner(
-            "Real bookmaker odds from The Odds API (decimal). Updated ${Formats.dayTime(odds.fetchedAt, zone)}" +
-                (odds.previousFetchedAt?.let { " · arrows compare with ${Formats.dayTime(it, zone)}" } ?: "") +
-                ". ${odds.bookmakerCount} bookmakers.",
+            "Real bookmaker odds (decimal) from ${odds.home?.best?.bookmaker ?: odds.over?.best?.bookmaker ?: "the bookmaker"}, " +
+                "via ESPN's free feed. Updated ${Formats.dayTime(odds.fetchedAt, zone)}. Arrows and \"was\" compare with the opening price.",
             color = Accent.Blue,
         )
         if (p != null) {
@@ -375,7 +374,7 @@ private fun OddsTab(item: MatchItem, odds: OddsSummary?, p: Prediction?) {
             InfoCard {
                 Text("Not in the feed", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Both-teams-to-score and double-chance prices: N/A (not included in The Odds API's bulk odds). Our probabilities for them are on the Overview tab.",
+                    "Both-teams-to-score and double-chance prices: N/A (not in the free feed). Our probabilities for them are on the Overview tab.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -450,11 +449,11 @@ private fun MarketCard(m: MarketOdds) {
 private fun TeamsTab(item: MatchItem, state: DetailUiState) {
     val x = state.extras
     if (item.competition.sport != SportType.FOOTBALL) {
-        EmptyState("Football only", "Team statistics come from football-data.org, which covers football. ${item.competition.sport.label} uses bookmaker consensus.")
+        EmptyState("Football only", "League-table statistics are used for football. ${item.competition.sport.label} predictions use the bookmaker's odds.")
         return
     }
     if (x.homeStats == null && x.awayStats == null && !x.loading) {
-        EmptyState("Statistics unavailable", "Needs a football-data.org key and a competition on its free plan (Champions League and top European leagues).")
+        EmptyState("Statistics unavailable", "No league table or recent results were found for this match.")
         return
     }
     Column {
@@ -526,21 +525,19 @@ private fun ResultRow(r: RecentResult) {
 @Composable
 private fun SquadTab(item: MatchItem, state: DetailUiState) {
     val x = state.extras
-    if (item.competition.sport != SportType.FOOTBALL) {
-        EmptyState("Football only", "Injury and line-up data comes from API-Football.")
-        return
-    }
     Column {
         if (!x.injuries.known) {
             Banner(
-                if (x.loading) "Loading injuries…" else "Injury and suspension data unavailable (needs an API-Football key and a matched fixture).",
+                if (x.loading) "Loading team news…"
+                else if (item.competition.sport == SportType.FOOTBALL) "Football injury lists aren't in the free feed. Check the line-ups below once they're confirmed."
+                else "No injury report published for this game.",
                 color = Accent.Blue,
             )
         } else {
             InjuryCard(item.homeTeam, x.injuries.homeOut, x.injuries.homeDoubtful)
             InjuryCard(item.awayTeam, x.injuries.awayOut, x.injuries.awayDoubtful)
             Text(
-                "Impact: the model lowers a side's expected goals by 2% per confirmed absence and 0.8% per doubt (max 10%). " +
+                "Impact: for football, the model lowers a side's expected goals by 2% per confirmed absence and 0.8% per doubt (max 10%). " +
                     "It cannot tell a star from a squad player, so check who is missing.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
@@ -575,22 +572,26 @@ private fun InjuryCard(team: String, out: List<String>, doubtful: List<String>) 
 }
 
 @Composable
-private fun LineupCard(l: AfLineup) {
+private fun LineupCard(l: LineupInfo) {
     InfoCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TeamBadge(l.team.name ?: "?", l.team.logo, 28.dp)
+            TeamBadge(l.team, l.logo, 28.dp)
             Spacer(Modifier.width(8.dp))
-            Text(l.team.name ?: "", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(l.team, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             l.formation?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = Accent.Blue) }
         }
         Spacer(Modifier.height(6.dp))
-        Text("Confirmed starting XI", style = MaterialTheme.typography.labelMedium, color = Accent.Green)
-        l.startXI.forEach { p ->
+        Text("Starting line-up", style = MaterialTheme.typography.labelMedium, color = Accent.Green)
+        l.starters.forEach { p ->
             Row(Modifier.padding(top = 2.dp)) {
-                Text("${p.player.number ?: ""}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(28.dp))
-                Text(p.player.name ?: "", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                Text(p.player.pos ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(p.number ?: "", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(28.dp))
+                Text(p.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                Text(p.position ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        if (l.bench.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text("Bench: " + l.bench.joinToString(", ") { it.name }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -616,7 +617,7 @@ private fun ConditionsTab(item: MatchItem, state: DetailUiState) {
             val w = x.weather
             if (w == null) {
                 Text(
-                    if (x.loading) "Loading…" else "N/A - needs the venue city (API-Football) and a kick-off within the 7-day forecast.",
+                    if (x.loading) "Loading…" else "N/A - needs a known venue city and a kick-off within the 7-day forecast.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
@@ -639,7 +640,7 @@ private fun ConditionsTab(item: MatchItem, state: DetailUiState) {
                 KeyValue("${item.awayTeam} away", String.format("%.2f scored · %.2f conceded per game", a.awayFor.toDouble() / a.awayPlayed, a.awayAgainst.toDouble() / a.awayPlayed))
             }
             Text(
-                "The model uses home/away splits when each side has 4+ such games; otherwise overall rates.",
+                "The model applies a standard home-advantage factor to each side's overall scoring rates.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -1,19 +1,18 @@
 package com.matchday.app.data.repo
 
 import com.matchday.app.data.local.AppDatabase
-import com.matchday.app.data.local.AppSettings
-import com.matchday.app.data.local.EventEntity
 import com.matchday.app.data.local.FavouriteEntity
-import com.matchday.app.data.local.OddsEntity
-import com.matchday.app.data.local.ScoreEntity
+import com.matchday.app.data.local.MatchEntity
+import com.matchday.app.data.local.OddsSnap
 import com.matchday.app.data.local.SettingsStore
-import com.matchday.app.data.remote.AfFixtureItem
-import com.matchday.app.data.remote.AfLineup
+import com.matchday.app.data.remote.EScoreboard
+import com.matchday.app.data.remote.EStandings
+import com.matchday.app.data.remote.ESummary
 import com.matchday.app.data.remote.Network
-import com.matchday.app.data.remote.OddsEventDto
 import com.matchday.app.domain.Catalog
 import com.matchday.app.domain.Competition
 import com.matchday.app.domain.InjuryInfo
+import com.matchday.app.domain.LineupInfo
 import com.matchday.app.domain.MatchItem
 import com.matchday.app.domain.MatchStatus
 import com.matchday.app.domain.ModelInputs
@@ -27,6 +26,9 @@ import com.matchday.app.domain.TeamStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,14 +38,15 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import retrofit2.Response
-import java.time.Instant
+import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
-data class RefreshResult(val ok: Boolean, val messages: List<String>, val creditsUsed: Int)
+data class RefreshResult(val ok: Boolean, val messages: List<String>)
 
 /** Everything the match screen shows beyond the list data. Filled progressively. */
 data class DetailExtras(
@@ -54,30 +57,30 @@ data class DetailExtras(
     val awayRecent: List<RecentResult> = emptyList(),
     val headToHead: List<RecentResult> = emptyList(),
     val injuries: InjuryInfo = InjuryInfo(known = false),
-    val lineups: List<AfLineup> = emptyList(),
+    val lineups: List<LineupInfo> = emptyList(),
     val venue: String? = null,
     val city: String? = null,
     val weather: WeatherInfo? = null,
-    val odds: OddsSummary? = null,
     val prediction: Prediction? = null,
     val notes: List<String> = emptyList(),
 )
 
+/**
+ * Single source of truth for matches. Data comes from ESPN's free public feed
+ * (no API key): scoreboards per league and day, match summaries and league tables.
+ */
 class MatchRepository(
     private val db: AppDatabase,
     private val settings: SettingsStore,
-    private val fd: FootballDataRepository,
-    private val af: ApiFootballRepository,
     private val weather: WeatherRepository,
     private val cache: JsonCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val oddsApi = Network.oddsApi
+    private val espn = Network.espn
     private val refreshMutex = Mutex()
+    private val gate = Semaphore(6) // be polite to the public feed
 
-    private val compStats = MutableStateFlow<Map<String, CompetitionStats>>(emptyMap())
-    private val afFixtures = MutableStateFlow<List<AfFixtureItem>>(emptyList())
-    private val afLive = MutableStateFlow<List<AfFixtureItem>>(emptyList())
+    private val tables = MutableStateFlow<Map<String, LeagueTable>>(emptyMap())
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -85,11 +88,12 @@ class MatchRepository(
     val messages: StateFlow<List<String>> = _messages
 
     private val predictionMemo = ConcurrentHashMap<String, Prediction>()
+    private val oddsMemo = ConcurrentHashMap<String, OddsSnap?>()
 
     private companion object {
         const val HOUR = 3_600_000L
-        const val REGIONS = "eu"
-        const val SCORES_TTL = 10 * 60_000L
+        const val DAY = 24 * HOUR
+        val YMD: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
     }
 
     // -----------------------------------------------------------------------
@@ -99,10 +103,10 @@ class MatchRepository(
     suspend fun refresh(force: Boolean): RefreshResult = refreshMutex.withLock {
         _refreshing.value = true
         try {
-            val result = doRefresh(force)
-            _messages.value = result.messages
-            if (result.ok) scope.launch { loadContext() }
-            result
+            val r = doRefresh(force)
+            _messages.value = r.messages
+            scope.launch { loadContext() }
+            r
         } finally {
             _refreshing.value = false
         }
@@ -110,363 +114,280 @@ class MatchRepository(
 
     private suspend fun doRefresh(force: Boolean): RefreshResult {
         val s = settings.current()
-        val key = s.effectiveOddsKey
-        val messages = mutableListOf<String>()
-        if (key.isBlank()) {
-            return RefreshResult(false, listOf("Add your The Odds API key in Settings to load fixtures and odds."), 0)
-        }
         val now = System.currentTimeMillis()
-        val comps = resolveCompetitions(s, key)
-        var credits = 0
+        val comps = s.enabledLeagues.map { Catalog.find(it) }
+        val messages = mutableListOf<String>()
         var anyOk = false
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val days = (-1..6).map { today.plusDays(it.toLong()) }
 
-        for (comp in comps) {
-            val stampKey = "refresh:odds:${comp.key}"
-            val age = cache.ageMs(stampKey)
-            val due = force || age == null || age > s.refreshMinutes * 60_000L
-            if (!due) { anyOk = true; continue }
-            try {
-                var resp = oddsApi.odds(comp.key, key, REGIONS, comp.markets, commenceTimeTo = isoIn(7 * 24 * HOUR))
-                if (resp.code() == 422 && comp.markets != "h2h") {
-                    resp = oddsApi.odds(comp.key, key, REGIONS, "h2h", commenceTimeTo = isoIn(7 * 24 * HOUR))
+        coroutineScope {
+            comps.map { comp ->
+                async {
+                    val stamp = "refresh:${comp.key}"
+                    val age = cache.ageMs(stamp)
+                    if (!force && age != null && age < s.refreshMinutes * 60_000L) return@async true
+                    val ok = refreshLeague(comp, days, now)
+                    if (ok) cache.touch(stamp)
+                    ok
                 }
-                trackQuota(resp)
-                when {
-                    resp.code() == 401 -> return RefreshResult(false, listOf("The Odds API rejected the key (401). Check it in Settings."), credits)
-                    resp.code() == 429 -> { messages += "The Odds API quota or rate limit reached (429). Showing cached data."; break }
-                    !resp.isSuccessful -> { messages += "${comp.title}: The Odds API error ${resp.code()}"; continue }
-                }
-                val body = resp.body().orEmpty()
-                credits += Catalog.creditCost(comp)
-                store(comp, body, now)
-                cache.touch(stampKey)
-                anyOk = true
-            } catch (e: Exception) {
-                messages += "${comp.title}: ${e.message ?: "network error"}"
+            }.awaitAll().forEachIndexed { i, ok ->
+                if (ok) anyOk = true else messages += "${comps[i].title}: couldn't load (check your connection)."
             }
         }
 
-        // Scores only for sports with matches that started in the last ~30h (costs 2 credits each).
-        val recent = db.events().since(now - 30 * HOUR).filter { it.commenceTime <= now }
-        for (sportKey in recent.map { it.sportKey }.distinct()) {
-            val stampKey = "refresh:scores:$sportKey"
-            val age = cache.ageMs(stampKey)
-            if (!force && age != null && age < SCORES_TTL) continue
-            try {
-                val resp = oddsApi.scores(sportKey, key, daysFrom = 1)
-                trackQuota(resp)
-                if (resp.isSuccessful) {
-                    storeScores(resp.body().orEmpty().map { dto ->
-                        ScoreEntity(
-                            eventId = dto.id, sportKey = dto.sportKey, sportTitle = dto.sportTitle,
-                            homeTeam = dto.homeTeam ?: "", awayTeam = dto.awayTeam ?: "",
-                            commenceTime = parseIso(dto.commenceTime), completed = dto.completed,
-                            homeScore = dto.scores?.firstOrNull { it.name == dto.homeTeam }?.score,
-                            awayScore = dto.scores?.firstOrNull { it.name == dto.awayTeam }?.score,
-                            updatedAt = now,
-                        )
-                    })
-                    cache.touch(stampKey)
-                    credits += 2
-                }
-            } catch (_: Exception) { /* scores are optional */ }
-        }
-
-        // Housekeeping
-        db.events().deleteBefore(now - 36 * HOUR)
-        db.odds().deleteBefore(now - 7 * 24 * HOUR)
-        db.scores().deleteBefore(now - 3 * 24 * HOUR)
-        db.notified().deleteBefore(now - 7 * 24 * HOUR)
-        db.cache().deleteBefore(now - 30L * 24 * HOUR)
+        db.matches().deleteBefore(now - 2 * DAY)
+        db.notified().deleteBefore(now - 7 * DAY)
+        db.cache().deleteBefore(now - 30 * DAY)
         predictionMemo.clear()
-        settings.markRefreshed(now)
-
-        return RefreshResult(anyOk, messages, credits)
+        if (anyOk) settings.markRefreshed(now)
+        return RefreshResult(anyOk || comps.isEmpty(), messages)
     }
 
-    private suspend fun resolveCompetitions(s: AppSettings, key: String): List<Competition> {
-        val list = mutableListOf<Competition>()
-        for (k in s.enabledSports) {
-            if (k == Catalog.TENNIS_ALL) {
-                try {
-                    val r = oddsApi.sports(key)
-                    if (r.isSuccessful) {
-                        r.body().orEmpty()
-                            .filter { it.group.equals("Tennis", true) && it.active && !it.hasOutrights }
-                            .forEach { list += Catalog.find(it.key, it.title) }
-                    }
-                } catch (_: Exception) { }
-            } else {
-                list += Catalog.find(k)
-            }
+    /** Downloads one league for the given days; returns false if nothing could be fetched. */
+    private suspend fun refreshLeague(comp: Competition, days: List<LocalDate>, now: Long): Boolean = coroutineScope {
+        val boards: List<EScoreboard?> = if (comp.sport == SportType.TENNIS) {
+            listOf(fetchBoard(comp, null))
+        } else {
+            days.map { d -> async { fetchBoard(comp, d.format(YMD)) } }.awaitAll()
         }
-        return list.sortedByDescending { it.tier }
-    }
-
-    private suspend fun store(comp: Competition, events: List<OddsEventDto>, now: Long) {
-        val entities = events.mapNotNull { e ->
-            val home = e.homeTeam ?: return@mapNotNull null
-            val away = e.awayTeam ?: return@mapNotNull null
-            EventEntity(e.id, e.sportKey, e.sportTitle.ifBlank { comp.title }, home, away, parseIso(e.commenceTime), now)
+        val okBoards = boards.filterNotNull()
+        if (okBoards.isEmpty()) return@coroutineScope false
+        val rows = okBoards.flatMap { b ->
+            val logo = b.leagues.firstOrNull()?.logos?.firstOrNull()?.href
+            b.events.flatMap { e -> EspnMapper.matches(comp, e, logo, now) }
+        }.filter { comp.sport != SportType.TENNIS || it.kickoff >= now - 2 * DAY }
+            .distinctBy { it.id }
+        if (rows.isNotEmpty()) db.matches().upsert(rows)
+        // Drop matches removed from the feed (only when every day loaded, so nothing is lost on errors).
+        if (okBoards.size == boards.size && comp.sport != SportType.TENNIS) {
+            val from = days.first().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+            val to = days.last().plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+            val keep = rows.map { it.id }
+            if (keep.isNotEmpty()) db.matches().deleteMissing(comp.key, from, to, keep)
         }
-        val rows = events.flatMap { e ->
-            e.bookmakers.flatMap { b ->
-                b.markets.flatMap { m ->
-                    m.outcomes.map { o ->
-                        OddsEntity(
-                            eventId = e.id, bookmakerKey = b.key, bookmakerTitle = b.title, market = m.key,
-                            outcome = o.name, point = o.point, price = o.price,
-                            bookUpdatedAt = parseIso(m.lastUpdate ?: b.lastUpdate ?: ""), fetchedAt = now,
-                        )
-                    }
-                }
-            }
+        true
+    }
+
+    private suspend fun fetchBoard(comp: Competition, date: String?): EScoreboard? = gate.withPermit {
+        try {
+            espn.scoreboard(comp.espnSport, comp.espnLeague, date)
+        } catch (_: Exception) {
+            null
         }
-        db.events().upsert(entities)
-        if (rows.isNotEmpty()) db.odds().insertAll(rows)
-        if (entities.isNotEmpty()) db.events().deleteMissing(comp.key, now, entities.map { it.id })
     }
 
-    private suspend fun storeScores(rows: List<ScoreEntity>) {
-        if (rows.isNotEmpty()) db.scores().upsert(rows.filter { it.homeTeam.isNotBlank() })
-    }
-
-    private suspend fun trackQuota(resp: Response<*>) {
-        val remaining = resp.headers()["x-requests-remaining"]?.toDoubleOrNull()?.toInt()
-        val used = resp.headers()["x-requests-used"]?.toDoubleOrNull()?.toInt()
-        if (remaining != null || used != null) settings.setQuota(remaining, used)
-    }
-
-    /** Loads league tables and API-Football fixtures in the background (cached, rate limited). */
+    /** Loads league tables (cached 6 h) for the football model. */
     suspend fun loadContext() {
         val s = settings.current()
-        val codes = s.enabledSports.mapNotNull { Catalog.find(it).fdCode }.distinct()
-        if (fd.hasKey()) {
-            for (code in codes) {
-                val stats = fd.competitionStats(code) ?: continue
-                compStats.value = compStats.value + (code to stats)
-                predictionMemo.clear()
-            }
-        }
-        if (af.hasKey()) {
-            val today = LocalDate.now(ZoneOffset.UTC)
-            val all = mutableListOf<AfFixtureItem>()
-            for (d in listOf(today, today.plusDays(1))) all += af.fixtures(d.toString())
-            afFixtures.value = all
+        for (key in s.enabledLeagues) {
+            val comp = Catalog.find(key)
+            if (!comp.hasTable) continue
+            val t = table(comp) ?: continue
+            tables.value = tables.value + (comp.key to t)
+            predictionMemo.clear()
         }
     }
 
-    suspend fun refreshLive(): List<String> {
-        val notes = mutableListOf<String>()
-        if (af.hasKey()) afLive.value = af.live() else notes += "Add an API-Football key for live minute-by-minute football scores."
-        val s = settings.current()
-        val key = s.effectiveOddsKey
-        if (key.isBlank()) return notes + "Add The Odds API key for scores in other sports."
-        val now = System.currentTimeMillis()
-        val inPlay = db.events().since(now - 5 * HOUR).filter { it.commenceTime <= now }.map { it.sportKey }.distinct()
-        for (sport in inPlay) {
-            val stamp = "refresh:live:$sport"
-            val age = cache.ageMs(stamp)
-            if (age != null && age < 2 * 60_000L) continue
-            try {
-                val resp = oddsApi.scores(sport, key) // 1 credit: live + upcoming only
-                trackQuota(resp)
-                if (resp.isSuccessful) {
-                    storeScores(resp.body().orEmpty().filter { it.scores != null }.map { dto ->
-                        ScoreEntity(
-                            eventId = dto.id, sportKey = dto.sportKey, sportTitle = dto.sportTitle,
-                            homeTeam = dto.homeTeam ?: "", awayTeam = dto.awayTeam ?: "",
-                            commenceTime = parseIso(dto.commenceTime), completed = dto.completed,
-                            homeScore = dto.scores?.firstOrNull { it.name == dto.homeTeam }?.score,
-                            awayScore = dto.scores?.firstOrNull { it.name == dto.awayTeam }?.score,
-                            updatedAt = now,
-                        )
-                    })
-                    cache.touch(stamp)
-                }
-            } catch (_: Exception) { }
+    private suspend fun table(comp: Competition): LeagueTable? = try {
+        val st = cache.get("standings:${comp.key}", 6 * HOUR, EStandings.serializer()) {
+            gate.withPermit { espn.standings(comp.espnSport, comp.espnLeague) }
         }
-        return notes
+        EspnMapper.table(comp.key, st, System.currentTimeMillis())
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Re-downloads today's scoreboard for leagues with games in play (free; called by the Live tab). */
+    suspend fun refreshLive(): List<String> {
+        val now = System.currentTimeMillis()
+        val inPlay = db.matches().since(now - 6 * HOUR)
+            .filter { it.state == "in" || (it.state == "pre" && it.kickoff <= now + 15 * 60_000L) }
+            .map { it.leagueKey }.distinct()
+        if (inPlay.isEmpty()) return emptyList()
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val days = listOf(today.minusDays(1), today)
+        var failed = 0
+        coroutineScope {
+            inPlay.map { key -> async { refreshLeague(Catalog.find(key), days, now) } }.awaitAll()
+                .forEach { if (!it) failed++ }
+        }
+        predictionMemo.clear()
+        return if (failed > 0) listOf("Some live scores couldn't be updated. Retrying automatically.") else emptyList()
     }
 
     // -----------------------------------------------------------------------
     // Observation (Room + memory -> UI models)
     // -----------------------------------------------------------------------
 
-    private data class Base(
-        val events: List<EventEntity>,
-        val odds: Map<String, List<OddsEntity>>,
-        val scores: List<ScoreEntity>,
-        val favourites: List<FavouriteEntity>,
-        val stats: Map<String, CompetitionStats>,
-    )
-
-    private data class Extra(val fixtures: List<AfFixtureItem>, val live: List<AfFixtureItem>)
-
     fun observeMatches(): Flow<List<MatchItem>> {
-        val since = System.currentTimeMillis() - 36 * HOUR
-        val base = combine(
-            db.events().observeSince(since),
-            db.odds().observeLatest().map { rows -> rows.groupBy { it.eventId } },
-            db.scores().observeSince(since),
+        val since = System.currentTimeMillis() - 2 * DAY
+        return combine(
+            db.matches().observeSince(since),
             db.favourites().observeAll(),
-            compStats,
-        ) { e, o, sc, fav, st -> Base(e, o, sc, fav, st) }
-        val extra = combine(afFixtures, afLive) { f, l -> Extra(f, l) }
-        return combine(base, extra) { b, x -> build(b, x) }.flowOn(Dispatchers.Default)
+            tables,
+            settings.flow,
+        ) { rows, favs, t, s -> build(rows.filter { it.leagueKey in s.enabledLeagues }, favs, t) }
+            .flowOn(Dispatchers.Default)
     }
 
     fun observeFavourites(): Flow<List<FavouriteEntity>> = db.favourites().observeAll()
 
-    private fun build(b: Base, x: Extra): List<MatchItem> {
-        val now = System.currentTimeMillis()
-        val favTeams = b.favourites.filter { it.type == "TEAM" }.map { it.name }
-        val favComps = b.favourites.filter { it.type == "COMPETITION" }.map { it.key.removePrefix("COMP:") }.toSet()
-        val scoreById = b.scores.associateBy { it.eventId }
-        val afAll = x.live + x.fixtures
+    fun observeMatch(id: String): Flow<MatchItem?> = observeMatches().map { list -> list.firstOrNull { it.id == id } }
 
-        val items = b.events.map { e ->
-            val comp = Catalog.find(e.sportKey, e.sportTitle)
-            val odds = b.odds[e.id]?.let { OddsMapper.summarize(it, e.homeTeam, e.awayTeam, comp.sport) }
-            toItem(comp, e.id, e.homeTeam, e.awayTeam, e.commenceTime, odds, scoreById[e.id], b.stats, afAll, favTeams, favComps, now)
-        }.toMutableList()
-
-        // Completed/live games that are no longer in the odds feed.
-        val known = items.map { it.id }.toSet()
-        for (sc in b.scores) {
-            if (sc.eventId in known) continue
-            val comp = Catalog.find(sc.sportKey, sc.sportTitle)
-            items += toItem(comp, sc.eventId, sc.homeTeam, sc.awayTeam, sc.commenceTime, null, sc, b.stats, afAll, favTeams, favComps, now)
+    fun oddsOf(e: MatchEntity): OddsSnap? {
+        val key = "${e.id}|${e.updatedAt}"
+        if (oddsMemo.containsKey(key)) return oddsMemo[key]
+        val snap = e.oddsJson?.let {
+            try { Network.json.decodeFromString(OddsSnap.serializer(), it) } catch (_: Exception) { null }
         }
-        return items.sortedBy { it.kickoff }
+        oddsMemo[key] = snap
+        return snap
     }
 
-    private fun toItem(
-        comp: Competition, id: String, home: String, away: String, kickoff: Long,
-        odds: OddsSummary?, score: ScoreEntity?, stats: Map<String, CompetitionStats>,
-        afAll: List<AfFixtureItem>, favTeams: List<String>, favComps: Set<String>, now: Long,
-    ): MatchItem {
-        val st = comp.fdCode?.let { stats[it] }
-        val homeStats = st?.teamStats(home)
-        val awayStats = st?.teamStats(away)
-        val afMatch = if (comp.sport == SportType.FOOTBALL) af.find(afAll, home, away, kickoff) else null
-        val afShort = afMatch?.fixture?.status?.short
+    private fun build(rows: List<MatchEntity>, favs: List<FavouriteEntity>, t: Map<String, LeagueTable>): List<MatchItem> {
+        val favTeams = favs.filter { it.type == "TEAM" }.map { it.name }
+        val favComps = favs.filter { it.type == "COMPETITION" }.map { it.key.removePrefix("COMP:") }.toSet()
+        return rows.map { toItem(it, t[it.leagueKey], favTeams, favComps) }.sortedBy { it.kickoff }
+    }
 
-        val window = when (comp.sport) {
-            SportType.FOOTBALL -> 2 * HOUR + 15 * 60_000L
-            SportType.BASKETBALL -> 3 * HOUR
-            SportType.BASEBALL -> 3 * HOUR + 30 * 60_000L
-            else -> 4 * HOUR
-        }
-        val status = when {
-            score?.completed == true || afShort in setOf("FT", "AET", "PEN") -> MatchStatus.FINISHED
-            afShort in setOf("1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT") -> MatchStatus.LIVE
-            now >= kickoff && now < kickoff + window -> MatchStatus.LIVE
-            now >= kickoff + window -> MatchStatus.FINISHED
+    private fun toItem(e: MatchEntity, table: LeagueTable?, favTeams: List<String>, favComps: Set<String>): MatchItem {
+        val base = Catalog.find(e.leagueKey)
+        val comp = if (e.leagueLogo != null) base.copy(emblem = e.leagueLogo) else base
+        val status = when (e.state) {
+            "in" -> MatchStatus.LIVE
+            "post" -> MatchStatus.FINISHED
             else -> MatchStatus.UPCOMING
         }
-        val useAfScore = afMatch != null && afMatch.goals.home != null && status != MatchStatus.UPCOMING
-        val homeScore = if (useAfScore) afMatch?.goals?.home?.toString() else score?.homeScore
-        val awayScore = if (useAfScore) afMatch?.goals?.away?.toString() else score?.awayScore
+        val odds = EspnMapper.summary(oddsOf(e), e.homeTeam, e.awayTeam, comp.sport, comp.hasDraw)
+        val homeStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, e.homeId, e.homeTeam, e.homeLogo, e.homeForm) else null
+        val awayStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, e.awayId, e.awayTeam, e.awayLogo, e.awayForm) else null
 
-        val memoKey = "$id|${odds?.fetchedAt}|${st?.fetchedAt}"
-        val prediction = if (status == MatchStatus.UPCOMING || odds != null) {
+        val memoKey = "${e.id}|${e.updatedAt}|${table?.fetchedAt}"
+        val prediction = if (status == MatchStatus.UPCOMING) {
             predictionMemo[memoKey] ?: PredictionEngine.predict(
-                comp, home, away, odds,
-                if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, st?.league, InjuryInfo(false)) else null,
+                comp, e.homeTeam, e.awayTeam, odds,
+                if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, table?.averages, InjuryInfo(false)) else null,
             )?.also { predictionMemo[memoKey] = it }
         } else null
 
-        val favourite = favTeams.any { TeamMatcher.same(it, home) || TeamMatcher.same(it, away) } || comp.key in favComps
-        val venue = afMatch?.fixture?.venue?.let { v -> listOfNotNull(v.name, v.city).joinToString(", ").ifBlank { null } }
+        val favourite = favTeams.any { TeamMatcher.same(it, e.homeTeam) || TeamMatcher.same(it, e.awayTeam) } || comp.key in favComps
         return MatchItem(
-            id = id, competition = comp, homeTeam = home, awayTeam = away, kickoff = kickoff,
-            status = status, homeScore = homeScore, awayScore = awayScore,
-            minute = afMatch?.fixture?.status?.elapsed?.takeIf { status == MatchStatus.LIVE },
+            id = e.id, competition = comp, homeTeam = e.homeTeam, awayTeam = e.awayTeam, kickoff = e.kickoff,
+            status = status, homeScore = e.homeScore, awayScore = e.awayScore, statusDetail = e.statusDetail,
             odds = odds, prediction = prediction,
-            homeCrest = homeStats?.crest ?: afMatch?.teams?.home?.logo,
-            awayCrest = awayStats?.crest ?: afMatch?.teams?.away?.logo,
-            venue = venue,
+            homeCrest = e.homeLogo, awayCrest = e.awayLogo,
+            venue = listOfNotNull(e.venue, e.city).joinToString(", ").ifBlank { null },
             popular = comp.tier >= 8 || favourite,
             favourite = favourite,
         )
     }
 
-    fun observeMatch(id: String): Flow<MatchItem?> = observeMatches().map { list -> list.firstOrNull { it.id == id } }
-
-    /** Deep analysis for one match: all-competition form, H2H, injuries, line-ups, weather. */
+    /** Deep analysis for one match: last 5, head-to-head, line-ups, injuries, weather. */
     fun loadDetail(item: MatchItem): Flow<DetailExtras> = flow {
         val comp = item.competition
+        val entity = db.matches().byId(item.id)
         var x = DetailExtras(loading = true)
         val notes = mutableListOf<String>()
-
-        // Full odds history (current vs previous refresh) for movement arrows.
-        val rows = db.odds().forEvent(item.id)
-        val odds = OddsMapper.summarize(rows, item.homeTeam, item.awayTeam, comp.sport)
-        x = x.copy(odds = odds)
         emit(x)
 
-        var homeStats: TeamStats? = null
-        var awayStats: TeamStats? = null
-        var league: com.matchday.app.domain.LeagueAverages? = null
-        if (comp.sport == SportType.FOOTBALL) {
-            val code = comp.fdCode
-            if (code != null && fd.hasKey()) {
-                val st = compStats.value[code] ?: fd.competitionStats(code)?.also { compStats.value = compStats.value + (code to it) }
-                homeStats = st?.teamStats(item.homeTeam)
-                awayStats = st?.teamStats(item.awayTeam)
-                league = st?.league
-                x = x.copy(homeStats = homeStats, awayStats = awayStats)
-                emit(x)
-                val hr = homeStats?.fdId?.let { fd.teamRecent(it) }.orEmpty()
-                val ar = awayStats?.fdId?.let { fd.teamRecent(it) }.orEmpty()
-                if (hr.isNotEmpty()) homeStats = homeStats?.copy(recent = hr)
-                if (ar.isNotEmpty()) awayStats = awayStats?.copy(recent = ar)
-                x = x.copy(homeStats = homeStats, awayStats = awayStats, homeRecent = hr.ifEmpty { homeStats?.recent.orEmpty() },
-                    awayRecent = ar.ifEmpty { awayStats?.recent.orEmpty() })
-                emit(x)
-                val h2h = fd.headToHead(code, item.homeTeam, item.awayTeam, item.kickoff)
-                x = x.copy(headToHead = h2h)
-                emit(x)
-                if (homeStats == null || awayStats == null) notes += "Team statistics could not be matched for this fixture."
-            } else if (code == null) {
-                notes += "${comp.title} is not covered by football-data.org's free plan: prediction uses bookmaker prices only."
-            } else {
-                notes += "Add a football-data.org key in Settings for form, tables and head-to-head."
-            }
+        val table = if (comp.hasTable) tables.value[comp.key] ?: table(comp)?.also { tables.value = tables.value + (comp.key to it) } else null
+        var homeStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, entity?.homeId, item.homeTeam, item.homeCrest, entity?.homeForm) else null
+        var awayStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, entity?.awayId, item.awayTeam, item.awayCrest, entity?.awayForm) else null
+        x = x.copy(homeStats = homeStats, awayStats = awayStats)
+        emit(x)
 
-            if (af.hasKey()) {
-                val date = Instant.ofEpochMilli(item.kickoff).atZone(ZoneOffset.UTC).toLocalDate().toString()
-                val fixture = af.find(af.fixtures(date), item.homeTeam, item.awayTeam, item.kickoff)
-                if (fixture != null) {
-                    val injuries = af.injuries(fixture.fixture.id, fixture.teams.home.id, fixture.teams.away.id)
-                    val untilKickoff = item.kickoff - System.currentTimeMillis()
-                    val lineups = if (untilKickoff < 90 * 60_000L) af.lineups(fixture.fixture.id) else emptyList()
-                    val city = fixture.fixture.venue.city
-                    x = x.copy(
-                        injuries = injuries, lineups = lineups,
-                        venue = fixture.fixture.venue.name, city = city,
-                    )
-                    emit(x)
-                    if (city != null) {
-                        x = x.copy(weather = weather.atKickoff(city, item.kickoff))
-                        emit(x)
-                    }
-                    if (lineups.isEmpty() && untilKickoff > 0) notes += "Line-ups are usually published 20-60 minutes before kick-off."
-                } else {
-                    notes += "Fixture not found on API-Football: injuries and venue unavailable."
+        val summary: ESummary? = if (entity != null && comp.sport != SportType.TENNIS) {
+            try {
+                val ttl = if (item.status == MatchStatus.UPCOMING && item.kickoff - System.currentTimeMillis() > 2 * HOUR) 3 * HOUR else 5 * 60_000L
+                cache.get("summary:${item.id}", ttl, ESummary.serializer()) {
+                    espn.summary(comp.espnSport, comp.espnLeague, entity.eventId)
                 }
-            } else {
-                notes += "Add an API-Football key for injuries, suspensions, line-ups, venue and weather."
+            } catch (_: Exception) {
+                notes += "Match details couldn't be loaded. Pull to refresh later."
+                null
             }
+        } else null
+
+        if (summary != null) {
+            val hr = EspnMapper.lastFive(summary.lastFiveGames, entity?.homeId, item.homeTeam)
+            val ar = EspnMapper.lastFive(summary.lastFiveGames, entity?.awayId, item.awayTeam)
+            if (hr.size >= 3) homeStats = homeStats?.copy(recent = hr)
+            if (ar.size >= 3) awayStats = awayStats?.copy(recent = ar)
+            val h2h = EspnMapper.headToHead(summary.seasonseries, entity?.homeId, item.homeTeam)
+            val lineups = EspnMapper.lineups(summary.rosters)
+            val injuries = injuriesOf(summary, item, entity?.homeId, entity?.awayId)
+            val venue = summary.gameInfo?.venue
+            x = x.copy(
+                homeStats = homeStats, awayStats = awayStats, homeRecent = hr, awayRecent = ar,
+                headToHead = h2h, lineups = lineups, injuries = injuries,
+                venue = venue?.fullName ?: entity?.venue, city = venue?.address?.city ?: entity?.city,
+            )
+            emit(x)
         } else {
-            notes += "Team statistics and injuries are only available for football; ${comp.sport.label} predictions use bookmaker consensus."
+            x = x.copy(venue = entity?.venue, city = entity?.city)
         }
 
-        val inputs = if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, league, x.injuries) else null
-        val prediction = PredictionEngine.predict(comp, item.homeTeam, item.awayTeam, odds, inputs)
+        val city = x.city
+        if (city != null && item.status == MatchStatus.UPCOMING) {
+            x = x.copy(weather = weather.atKickoff(city, item.kickoff))
+            emit(x)
+        }
+
+        if (comp.sport == SportType.FOOTBALL) {
+            if (!comp.hasTable) notes += "No league table for ${comp.title}: prediction uses bookmaker odds only."
+            if (item.odds == null) notes += "No bookmaker odds published for this match yet."
+        } else if (comp.sport == SportType.TENNIS) {
+            notes += "Tennis: fixtures and live scores only (the free feed has no tennis odds or stats)."
+        } else {
+            notes += "${comp.sport.label} predictions use the bookmaker's margin-free odds (no independent model)."
+        }
+
+        val inputs = if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, table?.averages, x.injuries) else null
+        val prediction = if (item.status == MatchStatus.UPCOMING) PredictionEngine.predict(comp, item.homeTeam, item.awayTeam, item.odds, inputs) else null
         emit(x.copy(loading = false, prediction = prediction, notes = notes))
     }.flowOn(Dispatchers.IO)
+
+    private fun injuriesOf(s: ESummary, item: MatchItem, homeId: String?, awayId: String?): InjuryInfo {
+        if (s.injuries.isEmpty()) return InjuryInfo(known = false)
+        fun forTeam(id: String?, name: String) = s.injuries.firstOrNull {
+            (id != null && it.team?.id == id) || TeamMatcher.same(it.team?.displayName ?: "", name)
+        }?.injuries.orEmpty()
+        fun label(i: com.matchday.app.data.remote.EInjury): String =
+            listOfNotNull(
+                i.athlete?.displayName,
+                i.athlete?.position?.abbreviation?.let { "($it)" },
+                listOfNotNull(i.details?.type, i.details?.detail).joinToString(" ").ifBlank { null },
+            ).joinToString(" ")
+        fun isOut(i: com.matchday.app.data.remote.EInjury) = (i.status ?: "").contains("out", true)
+        val h = forTeam(homeId, item.homeTeam)
+        val a = forTeam(awayId, item.awayTeam)
+        return InjuryInfo(
+            known = true,
+            homeOut = h.filter { isOut(it) }.map { label(it) }, homeDoubtful = h.filterNot { isOut(it) }.map { label(it) },
+            awayOut = a.filter { isOut(it) }.map { label(it) }, awayDoubtful = a.filterNot { isOut(it) }.map { label(it) },
+        )
+    }
+
+    /** Line-ups for alerts (bypasses the long summary cache). */
+    suspend fun lineupsNow(item: MatchItem): List<LineupInfo> {
+        val e = db.matches().byId(item.id) ?: return emptyList()
+        val comp = item.competition
+        return try {
+            val s = cache.get("summary:${item.id}", 60_000L, ESummary.serializer()) {
+                espn.summary(comp.espnSport, comp.espnLeague, e.eventId)
+            }
+            EspnMapper.lineups(s.rosters)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Current odds of every upcoming match, keyed by id (used to detect price moves). */
+    suspend fun oddsSnapshot(): Map<String, OddsSnap> {
+        val now = System.currentTimeMillis()
+        return db.matches().since(now).mapNotNull { e -> oddsOf(e)?.let { e.id to it } }.toMap()
+    }
 
     // -----------------------------------------------------------------------
     // Favourites
@@ -488,10 +409,6 @@ class MatchRepository(
 
     suspend fun removeFavourite(key: String) = db.favourites().delete(key)
 
-    // -----------------------------------------------------------------------
-
-    private fun isoIn(ms: Long): String =
-        Instant.ofEpochMilli(System.currentTimeMillis() + ms).truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString()
-
-    private fun parseIso(s: String): Long = try { Instant.parse(s).toEpochMilli() } catch (_: Exception) { 0L }
+    @Suppress("unused")
+    private fun summaryOdds(o: OddsSummary?) = o
 }

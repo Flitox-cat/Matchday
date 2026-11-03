@@ -4,8 +4,6 @@ import android.app.Application
 import android.content.Context
 import com.matchday.app.data.local.AppDatabase
 import com.matchday.app.data.local.SettingsStore
-import com.matchday.app.data.repo.ApiFootballRepository
-import com.matchday.app.data.repo.FootballDataRepository
 import com.matchday.app.data.repo.JsonCache
 import com.matchday.app.data.repo.MatchRepository
 import com.matchday.app.data.repo.WeatherRepository
@@ -21,10 +19,8 @@ class AppContainer(context: Context) {
     val db = AppDatabase.build(context)
     val settings = SettingsStore(context)
     val cache = JsonCache(db.cache())
-    val footballData = FootballDataRepository(cache, settings)
-    val apiFootball = ApiFootballRepository(cache, settings)
     val weather = WeatherRepository(cache)
-    val matches = MatchRepository(db, settings, footballData, apiFootball, weather, cache)
+    val matches = MatchRepository(db, settings, weather, cache)
 }
 
 class MatchdayApp : Application() {

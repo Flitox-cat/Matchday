@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.SportsBasketball
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.SportsTennis
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.SportsFootball
+import androidx.compose.material.icons.filled.SportsHockey
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -107,6 +109,8 @@ fun sportIcon(sport: SportType): ImageVector = when (sport) {
     SportType.BASKETBALL -> Icons.Filled.SportsBasketball
     SportType.TENNIS -> Icons.Filled.SportsTennis
     SportType.BASEBALL -> Icons.Filled.SportsBaseball
+    SportType.AMERICAN_FOOTBALL -> Icons.Filled.SportsFootball
+    SportType.HOCKEY -> Icons.Filled.SportsHockey
     SportType.OTHER -> Icons.Filled.EmojiEvents
 }
 
@@ -115,6 +119,8 @@ fun sportColor(sport: SportType): Color = when (sport) {
     SportType.BASKETBALL -> Accent.Orange
     SportType.TENNIS -> Color(0xFFD4E157)
     SportType.BASEBALL -> Accent.Blue
+    SportType.AMERICAN_FOOTBALL -> Color(0xFFB07D4F)
+    SportType.HOCKEY -> Color(0xFF00B8D9)
     SportType.OTHER -> Accent.Purple
 }
 

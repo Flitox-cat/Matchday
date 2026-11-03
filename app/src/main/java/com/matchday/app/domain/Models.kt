@@ -44,7 +44,7 @@ data class MatchItem(
     val status: MatchStatus,
     val homeScore: String?,
     val awayScore: String?,
-    val minute: Int?,
+    val statusDetail: String?,   // e.g. "45'", "HT", "Q3 5:12", "FT"
     val odds: OddsSummary?,
     val prediction: Prediction?,
     val homeCrest: String?,
@@ -106,7 +106,7 @@ data class Prediction(
 
 data class TeamStats(
     val name: String,
-    val fdId: Int?,
+    val teamId: String?,
     val crest: String?,
     val position: Int?,
     val played: Int,
@@ -146,6 +146,16 @@ data class InjuryInfo(
     val homeDoubtful: List<String> = emptyList(),
     val awayOut: List<String> = emptyList(),
     val awayDoubtful: List<String> = emptyList(),
+)
+
+data class LineupPlayer(val name: String, val number: String?, val position: String?)
+
+data class LineupInfo(
+    val team: String,
+    val logo: String?,
+    val formation: String?,
+    val starters: List<LineupPlayer>,
+    val bench: List<LineupPlayer>,
 )
 
 data class ModelInputs(

@@ -140,12 +140,12 @@ private fun StatusLabel(item: MatchItem) {
             LiveDot()
             Spacer(Modifier.width(4.dp))
             Text(
-                item.minute?.let { "LIVE $it'" } ?: "LIVE",
+                item.statusDetail?.let { "LIVE · $it" } ?: "LIVE",
                 style = MaterialTheme.typography.labelMedium,
                 color = Accent.Live, fontWeight = FontWeight.Bold,
             )
         }
-        MatchStatus.FINISHED -> Text("FT", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        MatchStatus.FINISHED -> Text(item.statusDetail ?: "FT", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         MatchStatus.UPCOMING -> Text(
             Formats.kickoffLabel(item.kickoff, zone),
             style = MaterialTheme.typography.labelMedium,

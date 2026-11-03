@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,15 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
-
-// Optional build-time API keys. Keys can also be entered in the app's Settings screen,
-// which is the recommended route for APKs built by GitHub Actions.
-val localProps = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
-fun key(name: String): String =
-    (localProps.getProperty(name) ?: System.getenv(name) ?: "").replace("\"", "")
 
 android {
     namespace = "com.matchday.app"
@@ -25,12 +14,8 @@ android {
         applicationId = "com.matchday.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
-
-        buildConfigField("String", "ODDS_API_KEY", "\"${key("ODDS_API_KEY")}\"")
-        buildConfigField("String", "FOOTBALL_DATA_KEY", "\"${key("FOOTBALL_DATA_KEY")}\"")
-        buildConfigField("String", "API_FOOTBALL_KEY", "\"${key("API_FOOTBALL_KEY")}\"")
+        versionCode = 2
+        versionName = "2.0.0"
     }
 
     buildTypes {

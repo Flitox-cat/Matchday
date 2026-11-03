@@ -5,72 +5,54 @@ enum class SportType(val label: String) {
     BASKETBALL("Basketball"),
     TENNIS("Tennis"),
     BASEBALL("Baseball"),
+    AMERICAN_FOOTBALL("NFL"),
+    HOCKEY("Hockey"),
     OTHER("Other"),
 }
 
-/**
- * A competition as The Odds API knows it ([key] = its sport key), linked to the
- * football-data.org competition code when that free source covers it.
- */
+/** A competition in ESPN's public feed. [key] = "sport/league", e.g. "soccer/eng.1". */
 data class Competition(
     val key: String,
     val title: String,
     val sport: SportType,
-    val fdCode: String?,
-    val tier: Int,          // 1..10, drives "popular"
-    val markets: String,    // markets requested from The Odds API (each costs 1 credit per call)
+    val tier: Int,               // 1..10, drives "popular"
     val hasDraw: Boolean,
-    val emblem: String?,
-)
+    val hasTable: Boolean,       // league table usable by the football model
+    val emblem: String?,         // filled from the feed's own league logo
+) {
+    val espnSport: String get() = key.substringBefore('/')
+    val espnLeague: String get() = key.substringAfter('/')
+}
 
 object Catalog {
-    const val TENNIS_ALL = "tennis_all"
-    private fun crest(code: String) = "https://crests.football-data.org/$code.png"
-
-    val FIXED: List<Competition> = listOf(
-        Competition("soccer_uefa_champs_league", "Champions League", SportType.FOOTBALL, "CL", 10, "h2h,totals", true, crest("CL")),
-        Competition("soccer_epl", "Premier League", SportType.FOOTBALL, "PL", 9, "h2h,totals", true, crest("PL")),
-        Competition("soccer_spain_la_liga", "La Liga", SportType.FOOTBALL, "PD", 9, "h2h,totals", true, crest("PD")),
-        Competition("soccer_uefa_europa_league", "Europa League", SportType.FOOTBALL, null, 8, "h2h,totals", true, null),
-        Competition("soccer_germany_bundesliga", "Bundesliga", SportType.FOOTBALL, "BL1", 8, "h2h,totals", true, crest("BL1")),
-        Competition("soccer_italy_serie_a", "Serie A", SportType.FOOTBALL, "SA", 8, "h2h,totals", true, crest("SA")),
-        Competition("soccer_france_ligue_one", "Ligue 1", SportType.FOOTBALL, "FL1", 7, "h2h,totals", true, crest("FL1")),
-        Competition("soccer_fifa_world_cup", "FIFA World Cup", SportType.FOOTBALL, "WC", 10, "h2h,totals", true, crest("WC")),
-        Competition("soccer_uefa_european_championship", "EURO", SportType.FOOTBALL, "EC", 9, "h2h,totals", true, crest("EC")),
-        Competition("soccer_fifa_world_cup_qualifiers_europe", "WC Qualifiers (Europe)", SportType.FOOTBALL, null, 7, "h2h,totals", true, null),
-        Competition("soccer_netherlands_eredivisie", "Eredivisie", SportType.FOOTBALL, "DED", 6, "h2h,totals", true, crest("DED")),
-        Competition("soccer_portugal_primeira_liga", "Primeira Liga", SportType.FOOTBALL, "PPL", 6, "h2h,totals", true, crest("PPL")),
-        Competition("soccer_efl_champ", "Championship", SportType.FOOTBALL, "ELC", 5, "h2h,totals", true, crest("ELC")),
-        Competition("soccer_brazil_campeonato", "Brasileirão", SportType.FOOTBALL, "BSA", 5, "h2h,totals", true, crest("BSA")),
-        Competition("basketball_nba", "NBA", SportType.BASKETBALL, null, 9, "h2h,spreads,totals", false, null),
-        Competition("basketball_euroleague", "EuroLeague", SportType.BASKETBALL, null, 6, "h2h,totals", false, null),
-        Competition("baseball_mlb", "MLB", SportType.BASEBALL, null, 7, "h2h,totals", false, null),
-        // Tennis tournaments change weekly; TENNIS_ALL expands to every active tennis key from /sports.
-        Competition(TENNIS_ALL, "Tennis (all active ATP/WTA)", SportType.TENNIS, null, 7, "h2h", false, null),
+    val ALL: List<Competition> = listOf(
+        Competition("soccer/uefa.champions", "Champions League", SportType.FOOTBALL, 10, true, true, null),
+        Competition("soccer/eng.1", "Premier League", SportType.FOOTBALL, 9, true, true, null),
+        Competition("soccer/esp.1", "La Liga", SportType.FOOTBALL, 9, true, true, null),
+        Competition("soccer/uefa.europa", "Europa League", SportType.FOOTBALL, 8, true, true, null),
+        Competition("soccer/ger.1", "Bundesliga", SportType.FOOTBALL, 8, true, true, null),
+        Competition("soccer/ita.1", "Serie A", SportType.FOOTBALL, 8, true, true, null),
+        Competition("soccer/fra.1", "Ligue 1", SportType.FOOTBALL, 7, true, true, null),
+        Competition("soccer/uefa.europa.conf", "Conference League", SportType.FOOTBALL, 6, true, true, null),
+        Competition("soccer/fifa.world", "FIFA World Cup", SportType.FOOTBALL, 10, true, false, null),
+        Competition("soccer/ned.1", "Eredivisie", SportType.FOOTBALL, 6, true, true, null),
+        Competition("soccer/por.1", "Primeira Liga", SportType.FOOTBALL, 6, true, true, null),
+        Competition("soccer/ksa.1", "Saudi Pro League", SportType.FOOTBALL, 6, true, true, null),
+        Competition("soccer/eng.2", "Championship", SportType.FOOTBALL, 5, true, true, null),
+        Competition("soccer/usa.1", "MLS", SportType.FOOTBALL, 5, true, true, null),
+        Competition("basketball/nba", "NBA", SportType.BASKETBALL, 9, false, false, null),
+        Competition("football/nfl", "NFL", SportType.AMERICAN_FOOTBALL, 8, false, false, null),
+        Competition("baseball/mlb", "MLB", SportType.BASEBALL, 7, false, false, null),
+        Competition("hockey/nhl", "NHL", SportType.HOCKEY, 6, false, false, null),
+        Competition("tennis/atp", "ATP Tennis", SportType.TENNIS, 7, false, false, null),
+        Competition("tennis/wta", "WTA Tennis", SportType.TENNIS, 7, false, false, null),
     )
 
-    /** Fits the free 500-credit plan at the default 12 h interval (~360 credits/month + scores). */
     val DEFAULT_ENABLED: Set<String> = setOf(
-        "soccer_uefa_champs_league", "soccer_epl", "soccer_spain_la_liga",
+        "soccer/uefa.champions", "soccer/eng.1", "soccer/esp.1", "soccer/uefa.europa",
+        "soccer/ger.1", "soccer/ita.1", "soccer/fra.1", "basketball/nba", "tennis/atp",
     )
 
-    fun find(key: String, title: String? = null): Competition {
-        FIXED.firstOrNull { it.key == key }?.let { return it }
-        return when {
-            key.startsWith("tennis_") -> {
-                val major = listOf("aus_open", "french_open", "wimbledon", "us_open").any { key.contains(it) }
-                Competition(key, title ?: prettify(key), SportType.TENNIS, null, if (major) 9 else 7, "h2h", false, null)
-            }
-            key.startsWith("soccer_") -> Competition(key, title ?: prettify(key), SportType.FOOTBALL, null, 4, "h2h,totals", true, null)
-            key.startsWith("basketball_") -> Competition(key, title ?: prettify(key), SportType.BASKETBALL, null, 4, "h2h,totals", false, null)
-            key.startsWith("baseball_") -> Competition(key, title ?: prettify(key), SportType.BASEBALL, null, 4, "h2h,totals", false, null)
-            else -> Competition(key, title ?: prettify(key), SportType.OTHER, null, 3, "h2h", false, null)
-        }
-    }
-
-    private fun prettify(key: String) =
-        key.substringAfter('_').split('_').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
-
-    /** Credits one odds refresh of this competition costs (1 region). */
-    fun creditCost(c: Competition) = c.markets.split(',').size
+    fun find(key: String): Competition = ALL.firstOrNull { it.key == key }
+        ?: Competition(key, key.substringAfter('/'), SportType.OTHER, 3, false, false, null)
 }
