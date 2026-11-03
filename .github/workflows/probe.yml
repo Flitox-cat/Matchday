@@ -1,0 +1,51 @@
+name: Probe data sources
+on:
+  push:
+    branches: [ probe ]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe ESPN
+        run: |
+          set +e
+          B=https://site.api.espn.com/apis/site/v2/sports
+          dump() { echo "=== $1"; curl -s -m 30 "$1" > out.json; python3 - "$2" <<'PY'
+          import json,sys
+          d=json.load(open('out.json'))
+          mode=sys.argv[1]
+          if mode=='sb':
+              ev=d.get('events',[]); print('events',len(ev))
+              for e in ev[:2]:
+                  c=e['competitions'][0]
+                  print('id',e['id'],e['date'],e['status']['type']['name'], e['status'].get('displayClock'))
+                  for x in c['competitors']:
+                      print('  ',x['homeAway'],x['team']['displayName'],x['team'].get('logo'),'score',x.get('score'),'form',x.get('form'),'rec',[r.get('summary') for r in x.get('records',[])])
+                  print('  venue',json.dumps(c.get('venue'))[:200])
+                  print('  odds',json.dumps(c.get('odds'))[:1500])
+          elif mode=='sum':
+              print('keys',list(d.keys()))
+              print('pickcenter',json.dumps(d.get('pickcenter'))[:1500])
+              print('odds',json.dumps(d.get('odds'))[:800])
+              print('h2h',json.dumps(d.get('headToHeadGames'))[:800])
+              print('lastFive',json.dumps(d.get('lastFiveGames'))[:1200] if d.get('lastFiveGames') else None)
+              print('boxscore.form',json.dumps(d.get('boxscore',{}).get('form'))[:1200])
+              print('rosters',json.dumps(d.get('rosters'))[:600])
+              print('injuries',json.dumps(d.get('injuries'))[:600])
+              print('gameInfo',json.dumps(d.get('gameInfo'))[:400])
+              print('standings',json.dumps(d.get('standings'))[:600])
+          elif mode=='st':
+              print(json.dumps(d)[:2500])
+          PY
+          }
+          dump "$B/soccer/uefa.champions/scoreboard?dates=20261104" sb
+          dump "$B/soccer/eng.1/scoreboard?dates=20261107-20261109" sb
+          dump "$B/basketball/nba/scoreboard?dates=20261104" sb
+          dump "$B/tennis/atp/scoreboard" sb
+          dump "$B/baseball/mlb/scoreboard" sb
+          ID=$(curl -s "$B/soccer/uefa.champions/scoreboard?dates=20261104" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
+          dump "$B/soccer/uefa.champions/summary?event=$ID" sum
+          ID2=$(curl -s "$B/soccer/eng.1/scoreboard?dates=20261107-20261109" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
+          dump "$B/soccer/eng.1/summary?event=$ID2" sum
+          dump "https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings" st
+          dump "https://site.api.espn.com/apis/v2/sports/soccer/uefa.champions/standings" st
