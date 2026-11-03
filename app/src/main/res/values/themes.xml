@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Matchday" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0B0F1A</item>
+        <item name="android:navigationBarColor">#0B0F1A</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+</resources>
