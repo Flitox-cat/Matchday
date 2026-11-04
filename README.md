@@ -2,11 +2,10 @@
 
 Kotlin · Jetpack Compose · Material 3 · MVVM · Retrofit · Room · WorkManager
 
-Daily fixtures, live scores, real bookmaker odds, transparent predictions and **Today's Best Picks**. It covers football (Champions League, top European leagues, more), NBA, NFL, MLB, NHL and tennis. Dark theme by default; times in Qatar time (AST, UTC+3).
+Daily fixtures, live scores, real bookmaker odds, transparent predictions and **Today's Best Picks**. It covers football (Champions League, top European leagues, more), NBA, NFL, MLB, NHL and tennis. Dark theme by default; 
 
 **No account, sign-up or API key is needed.** Install it and it works.
 
-> Estimates, not guarantees. Gambling is illegal in some countries, including Qatar; check your local law.
 
 ## Install
 
