@@ -52,6 +52,8 @@ run_pass() {
     tap_text "$tab"; sleep 6; check "$label tab $tab"
   done
   sleep 5
+  # Filter to football so the team/table/H2H sections are exercised with real data.
+  tap_text "Football"; sleep 4; screen_texts
   # Open a match: tap the "X" (draw odds) box inside the first football card, else the first "1" box.
   tap_text "X"; sleep 2
   dump; grep -q '"Overview"' ui.xml || { tap_text "1"; sleep 2; }
@@ -81,6 +83,7 @@ adb shell cmd connectivity airplane-mode disable 2>/dev/null; adb shell svc wifi
 
 echo "########## PASS 3: FRESH INSTALL WITH NO INTERNET (empty data) ##########"
 adb shell pm clear $PKG
+adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 adb shell svc wifi disable; adb shell svc data disable; adb shell cmd connectivity airplane-mode enable 2>/dev/null
 sleep 3
 adb shell am start -W -n $PKG/.MainActivity >/dev/null
