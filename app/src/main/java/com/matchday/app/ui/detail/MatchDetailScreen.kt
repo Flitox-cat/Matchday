@@ -78,7 +78,7 @@ import com.matchday.app.ui.components.sportColor
 import com.matchday.app.ui.theme.Accent
 
 // Match overview + AI prediction + best bet live on Overview; the rest follow the analysis order.
-private val tabs = listOf("Overview", "Teams", "Table", "Form", "H2H", "Squad", "Venue", "Odds")
+private val tabs = listOf("Overview", "Teams", "Table", "Form", "H2H", "BTTS", "Squad", "Venue", "Odds")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,8 +140,9 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
                 2 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
                 3 -> item { RecentFormTab(item, state.extras) }
                 4 -> item { HeadToHeadTab(item, state.extras) }
-                5 -> item { SquadTab(item, state) }
-                6 -> item { ConditionsTab(item, state) }
+                5 -> item { if (isFootball(item)) BttsTab(item, state.extras) else NotForSport(item) }
+                6 -> item { SquadTab(item, state) }
+                7 -> item { ConditionsTab(item, state) }
                 else -> item { OddsTab(item, odds, prediction) }
             }
         }

@@ -10,6 +10,8 @@ import com.matchday.app.data.remote.EScoreboard
 import com.matchday.app.data.remote.EStandings
 import com.matchday.app.data.remote.ESummary
 import com.matchday.app.data.remote.Network
+import com.matchday.app.domain.BttsAnalysis
+import com.matchday.app.domain.BttsEngine
 import com.matchday.app.domain.Catalog
 import com.matchday.app.domain.Competition
 import com.matchday.app.domain.InjuryInfo
@@ -67,6 +69,7 @@ data class DetailExtras(
     val homeProfile: TeamProfile? = null,
     val awayProfile: TeamProfile? = null,
     val summaryUpdatedAt: Long? = null,
+    val btts: BttsAnalysis? = null,
 )
 
 /** Everything the team sections show for one club. Null fields = data unavailable. */
@@ -406,6 +409,7 @@ class MatchRepository(
             venue = listOfNotNull(e.venue, e.city).joinToString(", ").ifBlank { null },
             popular = comp.tier >= 8 || favourite,
             favourite = favourite,
+            btts = if (comp.sport == SportType.FOOTBALL && status == MatchStatus.UPCOMING) BttsEngine.quick(prediction) else null,
         )
     }
 
@@ -478,7 +482,15 @@ class MatchRepository(
 
         val inputs = if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, table?.averages, x.injuries) else null
         val prediction = if (item.status == MatchStatus.UPCOMING) PredictionEngine.predict(comp, item.homeTeam, item.awayTeam, item.odds, inputs) else null
-        emit(x.copy(loading = false, prediction = prediction, notes = notes))
+        val btts = if (comp.sport == SportType.FOOTBALL) {
+            BttsEngine.analyze(
+                home = item.homeTeam, away = item.awayTeam, prediction = prediction ?: item.prediction,
+                homeRecent = x.homeProfile?.recent?.takeIf { it.isNotEmpty() } ?: x.homeRecent,
+                awayRecent = x.awayProfile?.recent?.takeIf { it.isNotEmpty() } ?: x.awayRecent,
+                h2h = x.headToHead, injuries = x.injuries,
+            )
+        } else null
+        emit(x.copy(loading = false, prediction = prediction, notes = notes, btts = btts))
     }.flowOn(Dispatchers.IO)
 
     private fun injuriesOf(s: ESummary, item: MatchItem, homeId: String?, awayId: String?): InjuryInfo {

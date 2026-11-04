@@ -8,12 +8,15 @@ data class Pick(
 
 data class AvoidItem(val match: MatchItem, val why: String)
 
+data class BttsPick(val match: MatchItem, val analysis: BttsAnalysis)
+
 data class BestPicks(
     val bestOverall: Pick?,
     val safest: List<Pick>,
     val bestValue: List<Pick>,
     val highRisk: List<Pick>,
     val avoid: List<AvoidItem>,
+    val btts: List<BttsPick> = emptyList(),
 )
 
 /**
@@ -75,7 +78,14 @@ object BestPicksRanker {
             else AvoidItem(m, "Uncertain: " + reasons.joinToString("; ") + ".")
         }.take(8)
 
-        return BestPicks(bestOverall, safest, bestValue, highRisk, avoid)
+        // BTTS: strongest leans either way (no BTTS prices in the free source, so ranked by
+        // probability margin and confidence, not by value).
+        val btts = upcoming.mapNotNull { m -> m.btts?.let { BttsPick(m, it) } }
+            .filter { it.analysis.confidence != Confidence.LOW }
+            .sortedByDescending { kotlin.math.abs(it.analysis.yes - 0.5) * confWeight(it.analysis.confidence) }
+            .take(6)
+
+        return BestPicks(bestOverall, safest, bestValue, highRisk, avoid, btts)
     }
 
     private fun valueWhy(m: MatchItem, p: Prediction, v: Selection): String =

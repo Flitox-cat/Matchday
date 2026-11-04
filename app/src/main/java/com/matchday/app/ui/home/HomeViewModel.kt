@@ -25,6 +25,7 @@ data class HomeFilters(
     val competitionKey: String? = null,
     val day: DayFilter = DayFilter.ALL,
     val popularOnly: Boolean = false,
+    val btts: String? = null, // "Yes" / "No": only matches with that BTTS lean
 )
 
 data class HomeUiState(
@@ -51,7 +52,8 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
         val filtered = all.filter { m ->
             (f.sport == null || m.competition.sport == f.sport) &&
                 (f.competitionKey == null || m.competition.key == f.competitionKey) &&
-                (!f.popularOnly || m.popular)
+                (!f.popularOnly || m.popular) &&
+                (f.btts == null || m.btts?.recommendation == f.btts)
         }
         fun day(m: MatchItem) = Formats.localDate(m.kickoff, zone)
         fun dayOk(m: MatchItem) = when (f.day) {
@@ -93,5 +95,6 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
     fun setSport(s: SportType?) { filters.value = filters.value.copy(sport = s, competitionKey = null) }
     fun setCompetition(k: String?) { filters.value = filters.value.copy(competitionKey = k) }
     fun setDay(d: DayFilter) { filters.value = filters.value.copy(day = d) }
+    fun setBtts(v: String?) { filters.value = filters.value.copy(btts = if (filters.value.btts == v) null else v) }
     fun togglePopular() { filters.value = filters.value.copy(popularOnly = !filters.value.popularOnly) }
 }

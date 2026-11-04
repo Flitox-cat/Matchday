@@ -5,9 +5,6 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-permissions:
-  contents: write   # publish the APK as a public release download
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -34,14 +31,3 @@ jobs:
         with:
           name: matchday-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Publish public download (GitHub release)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Matchday.apk
-          NOTES="Download Matchday.apk below, open it on your Android phone and allow installing from this source. Build ${GITHUB_SHA::7}."
-          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Matchday - download" --notes "$NOTES"
-          gh release upload latest Matchday.apk --clobber
-          gh release edit latest --notes "$NOTES"

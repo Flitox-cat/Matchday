@@ -130,6 +130,8 @@ private fun Filters(state: HomeUiState, vm: HomeViewModel) {
             items(DayFilter.entries) { d ->
                 FilterChip(selected = f.day == d, onClick = { vm.setDay(d) }, label = { Text(d.label) })
             }
+            item { FilterChip(selected = f.btts == "Yes", onClick = { vm.setBtts("Yes") }, label = { Text("BTTS Yes") }) }
+            item { FilterChip(selected = f.btts == "No", onClick = { vm.setBtts("No") }, label = { Text("BTTS No") }) }
         }
         val comps = state.competitions.filter { f.sport == null || it.sport == f.sport }
         if (comps.size > 1) {

@@ -120,7 +120,8 @@ fun MatchCard(item: MatchItem, onClick: () -> Unit, modifier: Modifier = Modifie
                             p.predictedScore?.let { append(" · $it") }
                         }
                         Text(headline, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val sub = p.bestValue?.let { "Value: ${it.label} @ ${Formats.odds(it.odds)}" } ?: "Estimate · no value pick"
+                        val bttsText = item.btts?.let { " · BTTS ${it.recommendation} ${Formats.pct(if (it.recommendation == "Yes") it.yes else it.no)}" } ?: ""
+                        val sub = (p.bestValue?.let { "Value: ${it.label} @ ${Formats.odds(it.odds)}" } ?: "No value pick") + bttsText
                         Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                     }
                     ConfidenceChip(p.confidence)

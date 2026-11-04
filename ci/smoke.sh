@@ -53,12 +53,14 @@ run_pass() {
   done
   sleep 5
   # Filter to football so the team/table/H2H sections are exercised with real data.
+  tap_text "BTTS Yes"; sleep 3; check "$label filter BTTS Yes"; screen_texts
+  tap_text "BTTS Yes"; sleep 2
   tap_text "Football"; sleep 4; screen_texts
   # Open a match: tap the "X" (draw odds) box inside the first football card, else the first "1" box.
   tap_text "X"; sleep 2
   dump; grep -q '"Overview"' ui.xml || { tap_text "1"; sleep 2; }
   sleep 8; check "$label open match"; screen_texts
-  for t in Teams Table Form H2H Squad Venue Odds Overview; do
+  for t in Teams Table Form H2H BTTS Squad Venue Odds Overview; do
     tap_text "$t"; sleep 6; check "$label match tab $t"; screen_texts
   done
   adb shell input keyevent 4; sleep 4; check "$label back to list"

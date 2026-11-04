@@ -105,6 +105,10 @@ fun PredictionsScreen(vm: PredictionsViewModel, onMatch: (String) -> Unit) {
             pickSection("Safest-looking selections", Accent.Blue, p.safest, onMatch)
             pickSection("Best value odds", Accent.Purple, p.bestValue, onMatch)
             pickSection("High-risk opportunities", Accent.Orange, p.highRisk, onMatch)
+            if (p.btts.isNotEmpty()) {
+                item { SectionHeader("Both Teams to Score", Accent.Green, p.btts.size) }
+                items(p.btts, key = { "btts_${it.match.id}" }) { BttsPickCard(it, onMatch) }
+            }
             if (p.avoid.isNotEmpty()) {
                 item { SectionHeader("Matches to avoid", Accent.Red, p.avoid.size) }
                 items(p.avoid, key = { "avoid_${it.match.id}" }) { AvoidCard(it, onMatch) }
@@ -181,6 +185,40 @@ private fun PickCard(pick: Pick, accent: Color, onMatch: (String) -> Unit, big: 
             Spacer(Modifier.height(6.dp))
             Text(pick.why, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+private fun BttsPickCard(pick: com.matchday.app.domain.BttsPick, onMatch: (String) -> Unit) {
+    val zone = LocalZone.current
+    val m = pick.match
+    val b = pick.analysis
+    val color = if (b.recommendation == "Yes") Accent.Green else Accent.Red
+    val prob = if (b.recommendation == "Yes") b.yes else b.no
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable { onMatch(m.id) }
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${m.homeTeam} v ${m.awayTeam}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(Formats.kickoffLabel(m.kickoff, zone), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("BTTS ${b.recommendation}", style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("${Formats.pct(prob)}  ·  odds N/A", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.width(8.dp))
+            ConfidenceChip(b.confidence)
+        }
+        Text(
+            "Quick estimate from expected goals; open the match for the full BTTS analysis (form, scoring rates, head-to-head).",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

@@ -52,6 +52,7 @@ data class MatchItem(
     val venue: String?,
     val popular: Boolean,
     val favourite: Boolean,
+    val btts: BttsAnalysis? = null,   // quick BTTS estimate (football, upcoming)
 )
 
 // ---------------------------------------------------------------------------
