@@ -6,58 +6,41 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe ESPN structures
+      - name: Probe team endpoints
         run: |
           set +e
-          B=https://site.api.espn.com/apis/site/v2/sports
           cat > p.py <<'PY'
           import json,sys
-          def strip(o,depth=0):
-              # drop links/logos noise
+          def strip(o):
               if isinstance(o,dict):
-                  return {k:strip(v,depth+1) for k,v in o.items() if k not in ('links','link','logos','tracking','images','headshot','flag')}
-              if isinstance(o,list):
-                  return [strip(x,depth+1) for x in o[:3]]
+                  return {k:strip(v) for k,v in o.items() if k not in ('links','link','logos','tracking','images','headshot','flag','$ref','jerseyImages')}
+              if isinstance(o,list): return [strip(x) for x in o[:3]]
               return o
-          d=json.load(sys.stdin)
-          path=sys.argv[1].split('.') if len(sys.argv)>1 and sys.argv[1] else []
-          for p in path:
-              d=d[int(p)] if p.isdigit() else d[p]
-          print(json.dumps(strip(d))[:int(sys.argv[2]) if len(sys.argv)>2 else 3000])
+          try:
+              d=json.load(sys.stdin)
+          except Exception as e:
+              print('NOT JSON', e); sys.exit()
+          for p in (sys.argv[1].split('.') if sys.argv[1] else []):
+              d=d[int(p)] if p.isdigit() else d.get(p) if isinstance(d,dict) else None
+              if d is None: print('MISSING',p); sys.exit()
+          print(json.dumps(strip(d))[:int(sys.argv[2])])
           PY
           g() { curl -s --compressed -m 30 "$1"; }
-          SB=$(g "$B/soccer/uefa.champions/scoreboard?dates=20261104")
-          echo "=== soccer scoreboard odds"; echo "$SB" | python3 p.py events.0.competitions.0.odds 4000
-          echo "=== soccer competitor"; echo "$SB" | python3 p.py events.0.competitions.0.competitors.0 2500
-          echo "=== soccer status"; echo "$SB" | python3 p.py events.0.status 800
-          echo "=== soccer league"; echo "$SB" | python3 p.py leagues.0 600
+          S=https://site.api.espn.com/apis/site/v2/sports/soccer
+          echo "=== team via uefa.champions"; g "$S/uefa.champions/teams/887" | python3 p.py team 2500
+          echo "=== team via all"; g "$S/all/teams/887" | python3 p.py team 1500
+          echo "=== team defaultLeague via core"; g "https://sports.core.api.espn.com/v2/sports/soccer/leagues/uefa.champions/teams/887" | python3 p.py "" 1500
+          echo "=== team schedule"; g "$S/uefa.champions/teams/887/schedule" | python3 p.py "" 1200
+          echo "=== gre.1 standings"; g "https://site.api.espn.com/apis/v2/sports/soccer/gre.1/standings" | python3 p.py children.0.standings.entries.0 2000
+          echo "=== tur.1 standings exists"; g "https://site.api.espn.com/apis/v2/sports/soccer/tur.1/standings" | python3 p.py children.0.name 200
+          echo "=== cze.1"; g "https://site.api.espn.com/apis/v2/sports/soccer/cze.1/standings" | python3 p.py children.0.name 200
+          echo "=== bel.1"; g "https://site.api.espn.com/apis/v2/sports/soccer/bel.1/standings" | python3 p.py children.0.name 200
+          echo "=== eng.1 entry full stats"; g "https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings" | python3 -c "
+          import json,sys;d=json.load(sys.stdin);e=d['children'][0]['standings']['entries'][0]
+          print(e['team']['displayName'],[(s.get('name'),s.get('displayValue')) for s in e['stats']])"
+          echo "=== summary h2h larger example (Arsenal v Liverpool style)"; SB=$(g "$S/eng.1/scoreboard?dates=20261108"); echo "$SB" | python3 -c "import sys,json;d=json.load(sys.stdin);print([(e['id'],e['name']) for e in d['events']][:5])"
           ID=$(echo "$SB" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
-          SUM=$(g "$B/soccer/uefa.champions/summary?event=$ID")
-          echo "=== summary lastFive event"; echo "$SUM" | python3 p.py lastFiveGames.0.events.0 1500
-          echo "=== summary rosters"; echo "$SUM" | python3 p.py rosters.0 2500
-          echo "=== summary standings entry"; echo "$SUM" | python3 p.py standings.groups.0.standings.entries.0 2500
-          echo "=== summary seasonseries"; echo "$SUM" | python3 p.py seasonseries 1500
-          echo "=== summary headtohead keys"; echo "$SUM" | python3 -c "import sys,json;d=json.load(sys.stdin);print([k for k in d]); print(json.dumps(d.get('headToHeadGames'))[:1500])"
-          echo "=== past match with lineups"; PAST=$(g "$B/soccer/uefa.champions/scoreboard?dates=20261021"); PID=$(echo "$PAST" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
-          PS=$(g "$B/soccer/uefa.champions/summary?event=$PID")
-          echo "$PS" | python3 p.py rosters.0.roster.0 1500
-          echo "$PS" | python3 -c "import sys,json;d=json.load(sys.stdin);r=d.get('rosters',[{}])[0];print('formation',r.get('formation'),'n',len(r.get('roster',[])))"
-          echo "$PS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(json.dumps(d.get('headToHeadGames'))[:1200])"
-          echo "=== nba summary"; NS=$(g "$B/basketball/nba/scoreboard?dates=20261104"); NID=$(echo "$NS" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
-          NSUM=$(g "$B/basketball/nba/summary?event=$NID")
-          echo "$NSUM" | python3 -c "import sys,json;d=json.load(sys.stdin);print(list(d.keys()))"
-          echo "$NSUM" | python3 p.py injuries 2000
-          echo "$NSUM" | python3 p.py pickcenter.0 2000
-          echo "$NSUM" | python3 p.py lastFiveGames.0.events.0 800
-          echo "=== nba scoreboard odds full"; echo "$NS" | python3 p.py events.0.competitions.0.odds.0 3000
-          echo "=== tennis"; T=$(g "$B/tennis/atp/scoreboard"); echo "$T" | python3 -c "
-          import sys,json;d=json.load(sys.stdin);e=d['events'][0];print(e.get('name'),list(e.keys()))
-          gr=e.get('groupings',[]);print('groupings',len(gr))
-          for g in gr[:2]:
-              print(g.get('grouping',{}).get('displayName'),len(g.get('competitions',[])))
-              for c in g.get('competitions',[])[:2]:
-                  print(json.dumps({k:c.get(k) for k in ('id','date','status','venue','odds')})[:700])
-                  for x in c.get('competitors',[]): print('  ',x.get('homeAway'),x.get('athlete',{}).get('displayName'),x.get('score'),json.dumps(x.get('linescores'))[:120])
-          "
-          echo "=== eng.1 range"; E=$(g "$B/soccer/eng.1/scoreboard?dates=20261107-20261110"); echo "$E" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d['events']), [e['name'] for e in d['events'][:3]])"
-          echo "=== live status types sample"; echo "$SB" | python3 p.py events.0.status.type 500
+          g "$S/eng.1/summary?event=$ID" | python3 -c "
+          import json,sys;d=json.load(sys.stdin)
+          for s in d.get('seasonseries',[]): print(s.get('type'),s.get('title'),s.get('seriesLabel'),s.get('shortSummary'),len(s.get('events',[])),[ (e.get('date'),e.get('competitionName')) for e in s.get('events',[])][:10])
+          print('h2hGames', json.dumps(d.get('headToHeadGames'))[:800])"
