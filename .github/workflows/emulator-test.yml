@@ -51,6 +51,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk Matchday.apk
+          # Keep the release tag on the tested commit
+          git tag -f latest && git push -f origin refs/tags/latest
           if ! gh release view latest >/dev/null 2>&1; then
             gh release create latest --title "Matchday - latest tested build" \
               --notes "Download Matchday.apk below, open it on your Android phone and allow installing from this source. Passed the automated emulator test (online, offline, fresh install)."
