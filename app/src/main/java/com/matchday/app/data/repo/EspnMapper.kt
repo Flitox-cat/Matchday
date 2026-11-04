@@ -209,8 +209,8 @@ object EspnMapper {
             ?: return emptyList()
         val id = block.team?.id
         return block.events.mapNotNull { e ->
-            val hs = e.homeTeamScore?.toIntOrNull() ?: return@mapNotNull null
-            val aws = e.awayTeamScore?.toIntOrNull() ?: return@mapNotNull null
+            val hs = goals(e.homeTeamScore) ?: return@mapNotNull null
+            val aws = goals(e.awayTeamScore) ?: return@mapNotNull null
             val isHome = id != null && e.homeTeamId == id
             RecentResult(
                 date = parseTime(e.gameDate),
@@ -229,9 +229,36 @@ object EspnMapper {
             val me = e.competitors.firstOrNull { (homeId != null && it.team?.id == homeId) || TeamMatcher.same(it.team?.displayName ?: "", homeName) }
                 ?: return@mapNotNull null
             val opp = e.competitors.firstOrNull { it !== me } ?: return@mapNotNull null
-            val gf = me.score?.toIntOrNull() ?: return@mapNotNull null
-            val ga = opp.score?.toIntOrNull() ?: return@mapNotNull null
+            val gf = goals(me.score) ?: return@mapNotNull null
+            val ga = goals(opp.score) ?: return@mapNotNull null
             RecentResult(parseTime(e.date), opp.team?.displayName ?: "?", me.homeAway == "home", gf, ga, e.competitionName)
+        }.sortedByDescending { it.date }
+
+    private val leadingInt = Regex("^\\s*(\\d+)")
+
+    /** "2", "2 (4)" or "2.0" -> 2; null when the score is missing. */
+    fun goals(text: String?): Int? = text?.let { leadingInt.find(it)?.groupValues?.get(1)?.toIntOrNull() }
+
+    /** Completed games from a team schedule, from that team's point of view. */
+    fun scheduleResults(s: com.matchday.app.data.remote.ESchedule?, teamId: String, fallbackCompetition: String?): List<RecentResult> =
+        s?.events.orEmpty().mapNotNull { e ->
+            val c = e.competitions.firstOrNull() ?: return@mapNotNull null
+            val st = c.status ?: e.status
+            val done = st?.type?.completed == true || st?.type?.state == "post"
+            if (!done) return@mapNotNull null
+            val me = c.competitors.firstOrNull { it.team?.id == teamId } ?: return@mapNotNull null
+            val opp = c.competitors.firstOrNull { it !== me } ?: return@mapNotNull null
+            val gf = goals(me.scoreText) ?: return@mapNotNull null
+            val ga = goals(opp.scoreText) ?: return@mapNotNull null
+            RecentResult(
+                date = parseTime(c.date ?: e.date),
+                opponent = opp.team?.displayName ?: "?",
+                home = me.homeAway == "home",
+                goalsFor = gf,
+                goalsAgainst = ga,
+                competition = e.season?.displayName ?: fallbackCompetition,
+                venue = (c.venue ?: e.venue)?.fullName,
+            )
         }.sortedByDescending { it.date }
 
     fun lineups(rosters: List<ERoster>): List<LineupInfo> = rosters.mapNotNull { r ->

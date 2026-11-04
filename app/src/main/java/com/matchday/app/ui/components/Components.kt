@@ -237,7 +237,7 @@ fun ProbabilityBar(home: Double, draw: Double?, away: Double, modifier: Modifier
 fun FormStrip(results: List<RecentResult>, max: Int = 6) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         results.take(max).forEach { r ->
-            val c = when (r.letter) { 'W' -> Accent.Green; 'D' -> Color(0xFF7D879E); else -> Accent.Red }
+            val c = when (r.letter) { 'W' -> Accent.Green; 'D' -> Accent.Orange; else -> Accent.Red }
             Box(
                 Modifier
                     .size(22.dp)

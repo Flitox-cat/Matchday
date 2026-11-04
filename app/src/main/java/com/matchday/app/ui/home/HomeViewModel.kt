@@ -77,15 +77,19 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            c.matches.loadContext()
-        }
-        viewModelScope.launch {
-            val s = c.settings.current()
-            if (System.currentTimeMillis() - s.lastRefresh > s.refreshMinutes * 60_000L) c.matches.refresh(force = false)
+            try {
+                c.matches.loadContext()
+                val s = c.settings.current()
+                if (System.currentTimeMillis() - s.lastRefresh > s.refreshMinutes * 60_000L) c.matches.refresh(force = false)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Startup refresh failed", e)
+            }
         }
     }
 
-    fun refresh() = viewModelScope.launch { c.matches.refresh(force = true) }
+    fun refresh() = viewModelScope.launch {
+        try { c.matches.refresh(force = true) } catch (e: Exception) { android.util.Log.e("HomeViewModel", "Refresh failed", e) }
+    }
     fun setSport(s: SportType?) { filters.value = filters.value.copy(sport = s, competitionKey = null) }
     fun setCompetition(k: String?) { filters.value = filters.value.copy(competitionKey = k) }
     fun setDay(d: DayFilter) { filters.value = filters.value.copy(day = d) }

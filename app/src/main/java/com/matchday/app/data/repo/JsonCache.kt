@@ -33,6 +33,20 @@ class JsonCache(private val dao: CacheDao) {
         }
     }
 
+    data class Timed<T>(val value: T, val fetchedAt: Long)
+
+    /** Like [get] but also returns when the data was actually downloaded (for "updated" labels). */
+    suspend fun <T> getTimed(
+        key: String,
+        ttlMs: Long,
+        serializer: KSerializer<T>,
+        fetch: suspend () -> T,
+    ): Timed<T> {
+        val value = get(key, ttlMs, serializer, fetch)
+        val at = dao.get(key)?.fetchedAt ?: System.currentTimeMillis()
+        return Timed(value, at)
+    }
+
     suspend fun <T> peek(key: String, serializer: KSerializer<T>): T? =
         dao.get(key)?.let { decode(it.body, serializer) }
 

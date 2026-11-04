@@ -129,6 +129,7 @@ data class RecentResult(
     val goalsFor: Int,
     val goalsAgainst: Int,
     val competition: String?,
+    val venue: String? = null,
 ) {
     val points: Int get() = when {
         goalsFor > goalsAgainst -> 3

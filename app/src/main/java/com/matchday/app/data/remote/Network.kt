@@ -35,6 +35,7 @@ object Network {
         .build()
 
     val espn: EspnService by lazy { retrofit("https://site.api.espn.com/").create(EspnService::class.java) }
+    val espnCore: EspnCoreService by lazy { retrofit("https://sports.core.api.espn.com/").create(EspnCoreService::class.java) }
     val geocoding: GeocodingService by lazy { retrofit("https://geocoding-api.open-meteo.com/").create(GeocodingService::class.java) }
     val weather: WeatherService by lazy { retrofit("https://api.open-meteo.com/").create(WeatherService::class.java) }
 }

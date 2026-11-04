@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -42,7 +43,15 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
     private fun load(i: MatchItem) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            c.matches.loadDetail(i).collect { extras.value = it }
+            c.matches.loadDetail(i)
+                .catch { e ->
+                    // Never leave the page spinning: stop loading and say what failed.
+                    extras.value = extras.value.copy(
+                        loading = false,
+                        notes = extras.value.notes + "Part of the analysis couldn't be loaded (${e.javaClass.simpleName}). Tap reload to retry.",
+                    )
+                }
+                .collect { extras.value = it }
         }
     }
 

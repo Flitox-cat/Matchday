@@ -77,7 +77,8 @@ import com.matchday.app.ui.components.TeamBadge
 import com.matchday.app.ui.components.sportColor
 import com.matchday.app.ui.theme.Accent
 
-private val tabs = listOf("Overview", "Odds", "Teams", "Squad", "Conditions")
+// Match overview + AI prediction + best bet live on Overview; the rest follow the analysis order.
+private val tabs = listOf("Overview", "Teams", "Table", "Form", "H2H", "Squad", "Venue", "Odds")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,13 +136,23 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
             item { Header(item, state) { vm.toggleTeam(it) } }
             when (tab) {
                 0 -> item { Overview(item, prediction, state.extras.notes) }
-                1 -> item { OddsTab(item, odds, prediction) }
-                2 -> item { TeamsTab(item, state) }
-                3 -> item { SquadTab(item, state) }
-                else -> item { ConditionsTab(item, state) }
+                1 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
+                2 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
+                3 -> item { RecentFormTab(item, state.extras) }
+                4 -> item { HeadToHeadTab(item, state.extras) }
+                5 -> item { SquadTab(item, state) }
+                6 -> item { ConditionsTab(item, state) }
+                else -> item { OddsTab(item, odds, prediction) }
             }
         }
     }
+}
+
+private fun isFootball(item: MatchItem) = item.competition.sport == SportType.FOOTBALL
+
+@Composable
+private fun NotForSport(item: MatchItem) {
+    EmptyState("Football only", "Team profiles and league tables are shown for football. For ${item.competition.sport.label}, see Form, H2H and Odds.")
 }
 
 // ---------------------------------------------------------------------------
@@ -438,83 +449,6 @@ private fun MarketCard(m: MarketOdds) {
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Teams
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun TeamsTab(item: MatchItem, state: DetailUiState) {
-    val x = state.extras
-    if (item.competition.sport != SportType.FOOTBALL) {
-        EmptyState("Football only", "League-table statistics are used for football. ${item.competition.sport.label} predictions use the bookmaker's odds.")
-        return
-    }
-    if (x.homeStats == null && x.awayStats == null && !x.loading) {
-        EmptyState("Statistics unavailable", "No league table or recent results were found for this match.")
-        return
-    }
-    Column {
-        StatsCard(item.homeTeam, x.homeStats, x.homeRecent)
-        StatsCard(item.awayTeam, x.awayStats, x.awayRecent)
-        InfoCard {
-            Text("Head-to-head", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
-            if (x.headToHead.isEmpty()) {
-                Text(if (x.loading) "Loading…" else "No previous meetings found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                val w = x.headToHead.count { it.points == 3 }
-                val d = x.headToHead.count { it.points == 1 }
-                val l = x.headToHead.size - w - d
-                Text("${item.homeTeam}: $w wins, $d draws, $l defeats", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(6.dp))
-                x.headToHead.take(10).forEach { ResultRow(it) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatsCard(name: String, s: TeamStats?, recent: List<RecentResult>) {
-    InfoCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TeamBadge(name, s?.crest, 32.dp)
-            Spacer(Modifier.width(10.dp))
-            Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            s?.position?.let { Text("#$it", style = MaterialTheme.typography.titleMedium, color = Accent.Blue) }
-        }
-        if (s == null) {
-            Text("No statistics matched for this team.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            return@InfoCard
-        }
-        Spacer(Modifier.height(8.dp))
-        KeyValue("Played / points", "${s.played} / ${s.points}")
-        KeyValue("Goals for - against", "${s.goalsFor} - ${s.goalsAgainst}")
-        if (s.played > 0) KeyValue("Per game", String.format("%.2f scored · %.2f conceded", s.goalsFor.toDouble() / s.played, s.goalsAgainst.toDouble() / s.played))
-        if (s.homePlayed > 0) KeyValue("Home", "${s.homeFor} - ${s.homeAgainst} in ${s.homePlayed}")
-        if (s.awayPlayed > 0) KeyValue("Away", "${s.awayFor} - ${s.awayAgainst} in ${s.awayPlayed}")
-        if (recent.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text("Last ${minOf(10, recent.size)} matches", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(6.dp))
-            FormStrip(recent, 10)
-            Spacer(Modifier.height(6.dp))
-            recent.take(10).forEach { ResultRow(it) }
-        }
-    }
-}
-
-@Composable
-private fun ResultRow(r: RecentResult) {
-    val zone = LocalZone.current
-    val c = when (r.letter) { 'W' -> Accent.Green; 'D' -> Color(0xFF7D879E); else -> Accent.Red }
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(Formats.day(r.date, zone), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(78.dp))
-        Text(if (r.home) "H" else "A", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(16.dp))
-        Text(r.opponent, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text("${r.goalsFor}-${r.goalsAgainst}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = c)
     }
 }
 

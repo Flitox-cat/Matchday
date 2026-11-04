@@ -20,10 +20,14 @@ data class ELeague(val name: String? = null, val logos: List<EHref> = emptyList(
 data class EScoreboard(val events: List<EEvent> = emptyList(), val leagues: List<ELeague> = emptyList())
 
 @Serializable
+data class ESeasonInfo(val displayName: String? = null)
+
+@Serializable
 data class EEvent(
     val id: String = "",
     val date: String? = null,
     val name: String? = null,
+    val season: ESeasonInfo? = null,
     val status: EStatus? = null,
     val competitions: List<EComp> = emptyList(),
     val groupings: List<EGrouping> = emptyList(), // tennis
@@ -227,6 +231,33 @@ data class ESummary(
     val gameInfo: EGameInfo? = null,
     val pickcenter: List<EOdds> = emptyList(),
 )
+
+// ---- teams/{id} and teams/{id}/schedule ----
+
+@Serializable
+data class EDefaultLeague(val slug: String? = null, val name: String? = null, val abbreviation: String? = null)
+
+@Serializable
+data class ETeamFull(
+    val id: String? = null,
+    val displayName: String? = null,
+    val logos: List<EHref> = emptyList(),
+    val defaultLeague: EDefaultLeague? = null,
+    val standingSummary: String? = null,
+)
+
+@Serializable
+data class ETeamResponse(val team: ETeamFull? = null)
+
+@Serializable
+data class EScheduleTeam(val standingSummary: String? = null)
+
+@Serializable
+data class ESchedule(val events: List<EEvent> = emptyList(), val team: EScheduleTeam? = null)
+
+/** sports.core.api.espn.com team record: used for the club's country (stadium address). */
+@Serializable
+data class ECoreTeam(val displayName: String? = null, val venue: EVenue? = null, val form: String? = null)
 
 // ---- standings ----
 

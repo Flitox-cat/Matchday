@@ -64,8 +64,13 @@ class LiveViewModel(private val c: AppContainer) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveUiState())
 
     suspend fun poll() {
-        notes.value = c.matches.refreshLive()
-        lastUpdate.value = System.currentTimeMillis()
+        notes.value = try {
+            c.matches.refreshLive().also { lastUpdate.value = System.currentTimeMillis() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            listOf("Live scores unavailable right now (offline or source error). Showing saved data.")
+        }
     }
 
     fun refreshNow() = viewModelScope.launch { poll() }

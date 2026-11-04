@@ -20,11 +20,35 @@ interface EspnService {
         @Query("event") eventId: String,
     ): ESummary
 
+    @GET("apis/site/v2/sports/{sport}/{league}/teams/{id}")
+    suspend fun team(
+        @Path("sport") sport: String,
+        @Path("league") league: String,
+        @Path("id") teamId: String,
+    ): ETeamResponse
+
+    @GET("apis/site/v2/sports/{sport}/{league}/teams/{id}/schedule")
+    suspend fun schedule(
+        @Path("sport") sport: String,
+        @Path("league") league: String,
+        @Path("id") teamId: String,
+    ): ESchedule
+
     @GET("apis/v2/sports/{sport}/{league}/standings")
     suspend fun standings(
         @Path("sport") sport: String,
         @Path("league") league: String,
     ): EStandings
+}
+
+/** ESPN core API (public, no key) - team details such as the stadium address. */
+interface EspnCoreService {
+    @GET("v2/sports/{sport}/leagues/{league}/teams/{id}")
+    suspend fun team(
+        @Path("sport") sport: String,
+        @Path("league") league: String,
+        @Path("id") teamId: String,
+    ): ECoreTeam
 }
 
 interface GeocodingService {

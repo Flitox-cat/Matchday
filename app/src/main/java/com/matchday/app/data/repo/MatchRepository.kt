@@ -1,5 +1,6 @@
 package com.matchday.app.data.repo
 
+import android.util.Log
 import com.matchday.app.data.local.AppDatabase
 import com.matchday.app.data.local.FavouriteEntity
 import com.matchday.app.data.local.MatchEntity
@@ -63,6 +64,26 @@ data class DetailExtras(
     val weather: WeatherInfo? = null,
     val prediction: Prediction? = null,
     val notes: List<String> = emptyList(),
+    val homeProfile: TeamProfile? = null,
+    val awayProfile: TeamProfile? = null,
+    val summaryUpdatedAt: Long? = null,
+)
+
+/** Everything the team sections show for one club. Null fields = data unavailable. */
+data class TeamProfile(
+    val name: String,
+    val logo: String?,
+    val teamId: String?,
+    val country: String?,
+    val stadium: String?,
+    val leagueName: String?,
+    val leagueKey: String?,
+    val table: LeagueTable?,
+    val row: TableRow?,
+    val standingSummary: String?,
+    val leagueForm: List<RecentResult>,
+    val recent: List<RecentResult>,
+    val updatedAt: Long?,
 )
 
 /**
@@ -88,9 +109,12 @@ class MatchRepository(
     val messages: StateFlow<List<String>> = _messages
 
     private val predictionMemo = ConcurrentHashMap<String, Prediction>()
-    private val oddsMemo = ConcurrentHashMap<String, OddsSnap?>()
+    // ConcurrentHashMap rejects null values, so "no odds" is stored as ParsedOdds(null).
+    private class ParsedOdds(val snap: OddsSnap?)
+    private val oddsMemo = ConcurrentHashMap<String, ParsedOdds>()
 
     private companion object {
+        const val TAG = "MatchRepository"
         const val HOUR = 3_600_000L
         const val DAY = 24 * HOUR
         val YMD: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
@@ -140,6 +164,7 @@ class MatchRepository(
         db.notified().deleteBefore(now - 7 * DAY)
         db.cache().deleteBefore(now - 30 * DAY)
         predictionMemo.clear()
+        oddsMemo.clear()
         if (anyOk) settings.markRefreshed(now)
         return RefreshResult(anyOk || comps.isEmpty(), messages)
     }
@@ -189,13 +214,100 @@ class MatchRepository(
         }
     }
 
-    private suspend fun table(comp: Competition): LeagueTable? = try {
-        val st = cache.get("standings:${comp.key}", 6 * HOUR, EStandings.serializer()) {
-            gate.withPermit { espn.standings(comp.espnSport, comp.espnLeague) }
-        }
-        EspnMapper.table(comp.key, st, System.currentTimeMillis())
-    } catch (_: Exception) {
+    private suspend fun table(comp: Competition): LeagueTable? = tableFor(comp.key)
+
+    /** League table for "sport/league" (cached 6 h; stale copy served offline). */
+    private suspend fun tableFor(leagueKey: String): LeagueTable? {
+        val sport = leagueKey.substringBefore('/')
+        val league = leagueKey.substringAfter('/')
+        val timed = safeCache("standings:$leagueKey", 6 * HOUR, EStandings.serializer()) {
+            gate.withPermit { espn.standings(sport, league) }
+        } ?: return null
+        return EspnMapper.table(leagueKey, timed.value, timed.fetchedAt)
+    }
+
+    /** Cached network read that returns null (and logs) instead of throwing. */
+    private suspend fun <T> safeCache(
+        key: String,
+        ttl: Long,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        fetch: suspend () -> T,
+    ): JsonCache.Timed<T>? = try {
+        cache.getTimed(key, ttl, serializer, fetch)
+    } catch (e: Exception) {
+        Log.w(TAG, "Unavailable: $key (${e.javaClass.simpleName}: ${e.message})")
         null
+    }
+
+    /**
+     * Club profile: domestic league + table position, country, and last results across
+     * competitions (domestic league schedule + this competition's schedule + ESPN's last-5).
+     */
+    private suspend fun profile(
+        comp: Competition,
+        teamId: String?,
+        name: String,
+        logo: String?,
+        summaryRecent: List<RecentResult>,
+    ): TeamProfile? {
+        if (teamId == null) return null
+        val sport = comp.espnSport
+        return coroutineScope {
+            val siteTeamJob = async {
+                safeCache("team:$sport:$teamId", 24 * HOUR, com.matchday.app.data.remote.ETeamResponse.serializer()) {
+                    gate.withPermit { espn.team(sport, comp.espnLeague, teamId) }
+                }
+            }
+            val coreTeamJob = async {
+                safeCache("coreteam:$sport:$teamId", 24 * HOUR, com.matchday.app.data.remote.ECoreTeam.serializer()) {
+                    gate.withPermit { Network.espnCore.team(sport, comp.espnLeague, teamId) }
+                }
+            }
+            val compScheduleJob = async {
+                safeCache("sched:${comp.key}:$teamId", 3 * HOUR, com.matchday.app.data.remote.ESchedule.serializer()) {
+                    gate.withPermit { espn.schedule(sport, comp.espnLeague, teamId) }
+                }
+            }
+            val siteTeam = siteTeamJob.await()?.value?.team
+            val domesticSlug = siteTeam?.defaultLeague?.slug ?: if (comp.hasTable) comp.espnLeague else null
+            val domesticKey = domesticSlug?.let { "$sport/$it" }
+            val tableJob = domesticKey?.let { k -> async { tableFor(k) } }
+            val leagueScheduleJob = if (domesticSlug != null && domesticSlug != comp.espnLeague) async {
+                safeCache("sched:$domesticKey:$teamId", 3 * HOUR, com.matchday.app.data.remote.ESchedule.serializer()) {
+                    gate.withPermit { espn.schedule(sport, domesticSlug, teamId) }
+                }
+            } else null
+
+            val compSchedule = compScheduleJob.await()
+            val leagueSchedule = leagueScheduleJob?.await() ?: if (domesticSlug == comp.espnLeague) compSchedule else null
+            val table = tableJob?.await()
+            val core = coreTeamJob.await()?.value
+            val leagueName = siteTeam?.defaultLeague?.name ?: if (comp.hasTable) comp.title else null
+
+            val leagueResults = EspnMapper.scheduleResults(leagueSchedule?.value, teamId, leagueName)
+            val compResults = EspnMapper.scheduleResults(compSchedule?.value, teamId, comp.title)
+            val recent = (leagueResults + compResults + summaryRecent)
+                .distinctBy { "${it.date / 86_400_000L}|${TeamMatcher.normalize(it.opponent)}" }
+                .sortedByDescending { it.date }
+                .take(10)
+            val row = table?.row(teamId, name)
+            val times = listOfNotNull(siteTeamJob.await()?.fetchedAt, table?.fetchedAt, compSchedule?.fetchedAt, leagueSchedule?.fetchedAt)
+            TeamProfile(
+                name = siteTeam?.displayName ?: name,
+                logo = logo ?: siteTeam?.logos?.firstOrNull()?.href,
+                teamId = teamId,
+                country = core?.venue?.address?.country,
+                stadium = core?.venue?.fullName,
+                leagueName = leagueName,
+                leagueKey = domesticKey,
+                table = table,
+                row = row,
+                standingSummary = siteTeam?.standingSummary ?: leagueSchedule?.value?.team?.standingSummary,
+                leagueForm = leagueResults.take(5),
+                recent = recent,
+                updatedAt = times.minOrNull(),
+            )
+        }
     }
 
     /** Re-downloads today's scoreboard for leagues with games in play (free; called by the Live tab). */
@@ -213,6 +325,7 @@ class MatchRepository(
                 .forEach { if (!it) failed++ }
         }
         predictionMemo.clear()
+        oddsMemo.clear()
         return if (failed > 0) listOf("Some live scores couldn't be updated. Retrying automatically.") else emptyList()
     }
 
@@ -237,18 +350,31 @@ class MatchRepository(
 
     fun oddsOf(e: MatchEntity): OddsSnap? {
         val key = "${e.id}|${e.updatedAt}"
-        if (oddsMemo.containsKey(key)) return oddsMemo[key]
+        oddsMemo[key]?.let { return it.snap }
         val snap = e.oddsJson?.let {
-            try { Network.json.decodeFromString(OddsSnap.serializer(), it) } catch (_: Exception) { null }
+            try {
+                Network.json.decodeFromString(OddsSnap.serializer(), it)
+            } catch (ex: Exception) {
+                Log.w(TAG, "Unreadable odds for ${e.id}", ex)
+                null
+            }
         }
-        oddsMemo[key] = snap
+        oddsMemo[key] = ParsedOdds(snap)
         return snap
     }
 
     private fun build(rows: List<MatchEntity>, favs: List<FavouriteEntity>, t: Map<String, LeagueTable>): List<MatchItem> {
         val favTeams = favs.filter { it.type == "TEAM" }.map { it.name }
         val favComps = favs.filter { it.type == "COMPETITION" }.map { it.key.removePrefix("COMP:") }.toSet()
-        return rows.map { toItem(it, t[it.leagueKey], favTeams, favComps) }.sortedBy { it.kickoff }
+        return rows.mapNotNull { row ->
+            try {
+                toItem(row, t[row.leagueKey], favTeams, favComps)
+            } catch (ex: Exception) {
+                // One malformed match must not take down the whole list; it is logged and skipped.
+                Log.e(TAG, "Skipping match ${row.id}", ex)
+                null
+            }
+        }.sortedBy { it.kickoff }
     }
 
     private fun toItem(e: MatchEntity, table: LeagueTable?, favTeams: List<String>, favComps: Set<String>): MatchItem {
@@ -297,17 +423,13 @@ class MatchRepository(
         x = x.copy(homeStats = homeStats, awayStats = awayStats)
         emit(x)
 
-        val summary: ESummary? = if (entity != null && comp.sport != SportType.TENNIS) {
-            try {
-                val ttl = if (item.status == MatchStatus.UPCOMING && item.kickoff - System.currentTimeMillis() > 2 * HOUR) 3 * HOUR else 5 * 60_000L
-                cache.get("summary:${item.id}", ttl, ESummary.serializer()) {
-                    espn.summary(comp.espnSport, comp.espnLeague, entity.eventId)
-                }
-            } catch (_: Exception) {
-                notes += "Match details couldn't be loaded. Pull to refresh later."
-                null
-            }
+        val summaryTimed = if (entity != null && comp.sport != SportType.TENNIS) {
+            val ttl = if (item.status == MatchStatus.UPCOMING && item.kickoff - System.currentTimeMillis() > 2 * HOUR) 3 * HOUR else 5 * 60_000L
+            safeCache("summary:${item.id}", ttl, ESummary.serializer()) {
+                gate.withPermit { espn.summary(comp.espnSport, comp.espnLeague, entity.eventId) }
+            }.also { if (it == null) notes += "Match details are unavailable right now (offline or source error)." }
         } else null
+        val summary: ESummary? = summaryTimed?.value
 
         if (summary != null) {
             val hr = EspnMapper.lastFive(summary.lastFiveGames, entity?.homeId, item.homeTeam)
@@ -322,10 +444,21 @@ class MatchRepository(
                 homeStats = homeStats, awayStats = awayStats, homeRecent = hr, awayRecent = ar,
                 headToHead = h2h, lineups = lineups, injuries = injuries,
                 venue = venue?.fullName ?: entity?.venue, city = venue?.address?.city ?: entity?.city,
+                summaryUpdatedAt = summaryTimed?.fetchedAt,
             )
             emit(x)
         } else {
             x = x.copy(venue = entity?.venue, city = entity?.city)
+        }
+
+        if (comp.sport == SportType.FOOTBALL) {
+            val (hp, ap) = coroutineScope {
+                val h = async { profile(comp, entity?.homeId, item.homeTeam, item.homeCrest, x.homeRecent) }
+                val a = async { profile(comp, entity?.awayId, item.awayTeam, item.awayCrest, x.awayRecent) }
+                Pair(h.await(), a.await())
+            }
+            x = x.copy(homeProfile = hp, awayProfile = ap)
+            emit(x)
         }
 
         val city = x.city
