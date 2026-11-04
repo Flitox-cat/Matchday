@@ -40,6 +40,7 @@ data class Verdict(
 object VerdictEngine {
     const val VALUE_EDGE = 0.03
     private const val STRONG_EDGE = 0.05
+    private const val SUSPICIOUS_EDGE = 0.25 // with low confidence, a gap this big usually means missing information
 
     private fun pct(x: Double) = "${Math.round(x * 100)}%"
     private fun signed(x: Double) = (if (x >= 0) "+" else "") + "${Math.round(x * 100)}%"
@@ -126,13 +127,16 @@ object VerdictEngine {
         }
         p!!
 
-        val candidates = lines.filter { it.probability != null && it.odds in 1.25..8.0 && it.isValue }
+        val candidates = lines.filter { it.probability != null && it.odds in 1.25..5.0 && it.isValue && !(p.confidence == Confidence.LOW && (it.edge ?: 0.0) > SUSPICIOUS_EDGE) }
             .sortedByDescending { (it.edge ?: 0.0) + 0.02 * strength(it, insights) }
         val best = candidates.firstOrNull()
 
         if (best == null) {
             val likeliest = lines.filter { it.probability != null }.maxByOrNull { it.probability!! }
-            reasons += "No available price beats our probability by ${pct(VALUE_EDGE)} or more."
+            val ignored = lines.filter { it.isValue && it.probability != null && it !in candidates }
+            reasons += if (ignored.isNotEmpty())
+                "Prices that look like value (${ignored.take(2).joinToString { "${it.label} @ ${String.format("%.2f", it.odds)}" }}) were ignored: long odds or a gap too large to trust with low model confidence."
+            else "No available price beats our probability by ${pct(VALUE_EDGE)} or more."
             likeliest?.let { reasons += "Likeliest outcome: ${it.label} (${pct(it.probability!!)}), but ${it.bookmaker}'s ${String.format("%.2f", it.odds)} already reflects it (implied ${pct(it.implied)})." }
             return Verdict(VerdictRating.AVOID, true, null, null, "NO BET - no value at current prices", reasons,
                 insightNotes(lines, insights), oddsSource, lines)
@@ -146,6 +150,7 @@ object VerdictEngine {
         val longShot = best.odds >= 3.5
 
         val rating = when {
+            edge > SUSPICIOUS_EDGE -> VerdictRating.RISKY
             edge >= STRONG_EDGE && !lowConfidence && !contradicted && !longShot -> VerdictRating.WORTH
             else -> VerdictRating.RISKY
         }
@@ -153,6 +158,7 @@ object VerdictEngine {
         reasons += "Model confidence: ${p.confidence.name.lowercase()}."
         if (lowConfidence) reasons += "Low confidence lowers the rating to Risky."
         if (longShot) reasons += "Odds of 3.50+ mean it loses more often than it wins, even with value."
+        if (edge > SUSPICIOUS_EDGE) reasons += "An edge above ${pct(SUSPICIOUS_EDGE)} is unusually large: the bookmaker may know something the model doesn't (injuries, rotation)."
         if (edge < STRONG_EDGE) reasons += "The edge is small (under ${pct(STRONG_EDGE)}), so the price could easily be fair."
         if (pro.isNotEmpty()) reasons += "Supported by history: " + pro.take(3).joinToString("; ") { it.title } + "."
         if (con.isNotEmpty()) reasons += "Contradicted by history: " + con.take(3).joinToString("; ") { it.title } + (if (contradicted) " - this lowers the rating." else ".")
