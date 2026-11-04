@@ -2,45 +2,60 @@ name: Probe data sources
 on:
   push:
     branches: [ probe ]
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe team endpoints
+      - uses: actions/checkout@v4
+      - name: Probe
         run: |
           set +e
           cat > p.py <<'PY'
           import json,sys
           def strip(o):
               if isinstance(o,dict):
-                  return {k:strip(v) for k,v in o.items() if k not in ('links','link','logos','tracking','images','headshot','flag','$ref','jerseyImages')}
-              if isinstance(o,list): return [strip(x) for x in o[:3]]
+                  return {k:strip(v) for k,v in o.items() if k not in ('links','link','logos','tracking','images','headshot','flag','$ref','jerseyImages','notes','broadcasts','tickets','geoBroadcasts')}
+              if isinstance(o,list): return [strip(x) for x in o[:2]]
               return o
-          try:
-              d=json.load(sys.stdin)
-          except Exception as e:
-              print('NOT JSON', e); sys.exit()
+          try: d=json.load(sys.stdin)
+          except Exception as e: print('NOT JSON', e); sys.exit()
           for p in (sys.argv[1].split('.') if sys.argv[1] else []):
-              d=d[int(p)] if p.isdigit() else d.get(p) if isinstance(d,dict) else None
+              d=d[int(p)] if p.isdigit() and isinstance(d,list) and len(d)>int(p) else (d.get(p) if isinstance(d,dict) else None)
               if d is None: print('MISSING',p); sys.exit()
           print(json.dumps(strip(d))[:int(sys.argv[2])])
           PY
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
-          echo "=== team via uefa.champions"; g "$S/uefa.champions/teams/887" | python3 p.py team 2500
-          echo "=== team via all"; g "$S/all/teams/887" | python3 p.py team 1500
-          echo "=== team defaultLeague via core"; g "https://sports.core.api.espn.com/v2/sports/soccer/leagues/uefa.champions/teams/887" | python3 p.py "" 1500
-          echo "=== team schedule"; g "$S/uefa.champions/teams/887/schedule" | python3 p.py "" 1200
-          echo "=== gre.1 standings"; g "https://site.api.espn.com/apis/v2/sports/soccer/gre.1/standings" | python3 p.py children.0.standings.entries.0 2000
-          echo "=== tur.1 standings exists"; g "https://site.api.espn.com/apis/v2/sports/soccer/tur.1/standings" | python3 p.py children.0.name 200
-          echo "=== cze.1"; g "https://site.api.espn.com/apis/v2/sports/soccer/cze.1/standings" | python3 p.py children.0.name 200
-          echo "=== bel.1"; g "https://site.api.espn.com/apis/v2/sports/soccer/bel.1/standings" | python3 p.py children.0.name 200
-          echo "=== eng.1 entry full stats"; g "https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings" | python3 -c "
-          import json,sys;d=json.load(sys.stdin);e=d['children'][0]['standings']['entries'][0]
-          print(e['team']['displayName'],[(s.get('name'),s.get('displayValue')) for s in e['stats']])"
-          echo "=== summary h2h larger example (Arsenal v Liverpool style)"; SB=$(g "$S/eng.1/scoreboard?dates=20261108"); echo "$SB" | python3 -c "import sys,json;d=json.load(sys.stdin);print([(e['id'],e['name']) for e in d['events']][:5])"
-          ID=$(echo "$SB" | python3 -c "import sys,json;print(json.load(sys.stdin)['events'][0]['id'])")
-          g "$S/eng.1/summary?event=$ID" | python3 -c "
-          import json,sys;d=json.load(sys.stdin)
-          for s in d.get('seasonseries',[]): print(s.get('type'),s.get('title'),s.get('seriesLabel'),s.get('shortSummary'),len(s.get('events',[])),[ (e.get('date'),e.get('competitionName')) for e in s.get('events',[])][:10])
-          print('h2hGames', json.dumps(d.get('headToHeadGames'))[:800])"
+          {
+          echo "=== teams list eng.1"; g "$S/eng.1/teams" | python3 p.py sports.0.leagues.0.teams.0 600
+          g "$S/eng.1/teams" | python3 -c "import sys,json;d=json.load(sys.stdin);t=d['sports'][0]['leagues'][0]['teams'];print('count',len(t),[x['team'].get('location') for x in t[:3]],[list(x['team'].keys()) for x in t[:1]])"
+          echo "=== search endpoint"; g "https://site.web.api.espn.com/apis/common/v3/search?query=liverp&type=team&limit=5" | python3 p.py "" 1500
+          echo "=== search v2"; g "https://site.web.api.espn.com/apis/search/v2?query=liverpool&limit=5" | python3 p.py "" 1200
+          echo "=== Liverpool (364) schedule current"; L=$(g "$S/eng.1/teams/364/schedule"); echo "$L" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev),'keys',list(d.keys()))
+          import collections
+          print('states',collections.Counter(e['competitions'][0]['status']['type']['state'] for e in ev))
+          e=ev[0];c=e['competitions'][0];print('venue',json.dumps(c.get('venue'))[:300]);print('season',e.get('season'),'seasonType',e.get('seasonType'))"
+          echo "=== fixture=true param"; g "$S/eng.1/teams/364/schedule?fixture=true" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev));
+          [print(e.get('date'),e['competitions'][0]['status']['type']['state'],e.get('name')) for e in ev[:4]]"
+          echo "=== past season 2023 eng.1"; g "$S/eng.1/teams/364/schedule?season=2023" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev));
+          [print(e.get('date'),e.get('name'),json.dumps(e['competitions'][0].get('venue'))[:160],[ (x['team']['displayName'],x.get('score')) for x in e['competitions'][0]['competitors']]) for e in ev[:3]]"
+          echo "=== past season 2023 UCL"; g "$S/uefa.champions/teams/364/schedule?season=2023" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev))"
+          echo "=== past season 2022 UCL"; g "$S/uefa.champions/teams/364/schedule?season=2022" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev));
+          [print(e.get('date'),e.get('name'),json.dumps(e['competitions'][0].get('venue'))[:200]) for e in ev[:6]]"
+          echo "=== past season 2019 UCL"; g "$S/uefa.champions/teams/364/schedule?season=2019" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev))"
+          echo "=== all comps schedule"; g "$S/all/teams/364/schedule" | python3 -c "
+          import sys,json;d=json.load(sys.stdin);ev=d.get('events',[]);print('events',len(ev))"
+          echo "=== core team venue (Fenerbahce 436?)"; g "$S/tur.1/teams" | python3 -c "import sys,json;d=json.load(sys.stdin);t=d['sports'][0]['leagues'][0]['teams'];print([(x['team']['id'],x['team']['displayName']) for x in t[:20]])"
+          echo "=== core venue sample"; g "https://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/teams/364" | python3 p.py venue 400
+          } > probe_out.txt 2>&1
+          cat probe_out.txt
+          git config user.name Matchday; git config user.email matchday@users.noreply.github.com
+          git add probe_out.txt && git commit -qm "probe output" && git push -q origin HEAD:probe
