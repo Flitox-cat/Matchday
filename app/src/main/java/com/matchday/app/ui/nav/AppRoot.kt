@@ -48,6 +48,8 @@ import com.matchday.app.ui.predictions.PredictionsScreen
 import com.matchday.app.ui.predictions.PredictionsViewModel
 import com.matchday.app.ui.settings.SettingsScreen
 import com.matchday.app.ui.settings.SettingsViewModel
+import com.matchday.app.ui.team.TeamScreen
+import com.matchday.app.ui.team.TeamViewModel
 import com.matchday.app.ui.theme.Accent
 import com.matchday.app.ui.zone
 
@@ -75,12 +77,14 @@ fun AppRoot(settings: AppSettings) {
         restoreState = true
     }
     val openMatch: (String) -> Unit = { id -> nav.navigate("match/$id") }
+    // leagueKey is "sport/league" so it maps onto two path segments.
+    val openTeam: (String, String) -> Unit = { league, id -> nav.navigate("team/$league/$id") }
 
     CompositionLocalProvider(LocalZone provides settings.zone()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                if (route?.startsWith("match/") != true) {
+                if (route?.startsWith("match/") != true && route?.startsWith("team/") != true) {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         tabs.forEach { t ->
                             NavigationBarItem(
@@ -103,7 +107,7 @@ fun AppRoot(settings: AppSettings) {
                 NavHost(navController = nav, startDestination = "home") {
                     composable("home") {
                         val vm: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(container) } })
-                        HomeScreen(vm, onMatch = openMatch, onSettings = { goTab("settings") })
+                        HomeScreen(vm, onMatch = openMatch, onSettings = { goTab("settings") }, onTeam = openTeam)
                     }
                     composable("predictions") {
                         val vm: PredictionsViewModel = viewModel(factory = viewModelFactory { initializer { PredictionsViewModel(container) } })
@@ -132,7 +136,24 @@ fun AppRoot(settings: AppSettings) {
                             key = "match_$id",
                             factory = viewModelFactory { initializer { MatchDetailViewModel(container, id) } },
                         )
-                        MatchDetailScreen(vm, onBack = { nav.popBackStack() })
+                        MatchDetailScreen(vm, onBack = { nav.popBackStack() }, onSettings = { goTab("settings") }, onTeam = openTeam)
+                    }
+                    composable(
+                        "team/{sport}/{league}/{id}",
+                        arguments = listOf(
+                            navArgument("sport") { type = NavType.StringType },
+                            navArgument("league") { type = NavType.StringType },
+                            navArgument("id") { type = NavType.StringType },
+                        ),
+                    ) { entry ->
+                        val a = entry.arguments
+                        val league = "${a?.getString("sport") ?: "soccer"}/${a?.getString("league") ?: "all"}"
+                        val id = a?.getString("id") ?: ""
+                        val vm: TeamViewModel = viewModel(
+                            key = "team_${league}_$id",
+                            factory = viewModelFactory { initializer { TeamViewModel(container, league, id) } },
+                        )
+                        TeamScreen(vm, onBack = { nav.popBackStack() }, onMatch = openMatch)
                     }
                 }
             }

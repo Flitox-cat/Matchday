@@ -50,6 +50,10 @@ class JsonCache(private val dao: CacheDao) {
     suspend fun <T> peek(key: String, serializer: KSerializer<T>): T? =
         dao.get(key)?.let { decode(it.body, serializer) }
 
+    suspend fun <T> put(key: String, serializer: KSerializer<T>, value: T) {
+        dao.put(CacheEntity(key, Network.json.encodeToString(serializer, value), System.currentTimeMillis()))
+    }
+
     suspend fun ageMs(key: String): Long? = dao.get(key)?.let { System.currentTimeMillis() - it.fetchedAt }
 
     suspend fun touch(key: String) = dao.put(CacheEntity(key, "{}", System.currentTimeMillis()))

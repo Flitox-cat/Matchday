@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -218,6 +219,20 @@ class MatchRepository(
     }
 
     private suspend fun table(comp: Competition): LeagueTable? = tableFor(comp.key)
+
+    /** Table already in memory or on disk (never hits the network). */
+    suspend fun cachedTable(leagueKey: String): LeagueTable? = tables.value[leagueKey]
+        ?: cache.peek("standings:$leagueKey", EStandings.serializer())?.let { EspnMapper.table(leagueKey, it, cache.ageMs("standings:$leagueKey")?.let { a -> System.currentTimeMillis() - a } ?: 0L) }
+
+    /** One-off snapshot of the match list. */
+    suspend fun observeMatchesOnce(): List<MatchItem> = observeMatches().first()
+
+    /** Public access to a cached league table (team pages). */
+    suspend fun leagueTable(leagueKey: String): LeagueTable? = tableFor(leagueKey)
+
+    /** ESPN team id of both sides (null when unknown). */
+    suspend fun teamIds(matchId: String): Pair<String?, String?> =
+        db.matches().byId(matchId)?.let { it.homeId to it.awayId } ?: (null to null)
 
     /** League table for "sport/league" (cached 6 h; stale copy served offline). */
     private suspend fun tableFor(leagueKey: String): LeagueTable? {

@@ -78,11 +78,11 @@ import com.matchday.app.ui.components.sportColor
 import com.matchday.app.ui.theme.Accent
 
 // Match overview + AI prediction + best bet live on Overview; the rest follow the analysis order.
-private val tabs = listOf("Overview", "Teams", "Table", "Form", "H2H", "BTTS", "Squad", "Venue", "Odds")
+private val tabs = listOf("Overview", "Insights", "Teams", "Table", "Form", "H2H", "BTTS", "Squad", "Venue", "Odds")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MatchDetailScreen(vm: MatchDetailViewModel, onBack: () -> Unit) {
+fun MatchDetailScreen(vm: MatchDetailViewModel, onBack: () -> Unit, onSettings: () -> Unit = {}, onTeam: (String, String) -> Unit = { _, _ -> }) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val item = state.item
@@ -110,13 +110,13 @@ fun MatchDetailScreen(vm: MatchDetailViewModel, onBack: () -> Unit) {
         if (item == null) {
             EmptyState("Match not available", "It may have been removed from the odds feed. Go back and refresh.")
         } else {
-            DetailBody(vm, state, item, tab) { tab = it }
+            DetailBody(vm, state, item, tab, onSettings, onTeam) { tab = it }
         }
     }
 }
 
 @Composable
-private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: MatchItem, tab: Int, onTab: (Int) -> Unit) {
+private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: MatchItem, tab: Int, onSettings: () -> Unit, onTeam: (String, String) -> Unit, onTab: (Int) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         AnimatedVisibility(state.extras.loading) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent.Purple)
@@ -133,17 +133,28 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
         val prediction = state.extras.prediction ?: item.prediction
         val odds = item.odds
         LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
-            item { Header(item, state) { vm.toggleTeam(it) } }
+            item { Header(item, state, onTeam) { vm.toggleTeam(it) } }
             when (tab) {
-                0 -> item { Overview(item, prediction, state.extras.notes) }
-                1 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
-                2 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
-                3 -> item { RecentFormTab(item, state.extras) }
-                4 -> item { HeadToHeadTab(item, state.extras) }
-                5 -> item { if (isFootball(item)) BttsTab(item, state.extras) else NotForSport(item) }
-                6 -> item { SquadTab(item, state) }
-                7 -> item { ConditionsTab(item, state) }
-                else -> item { OddsTab(item, odds, prediction) }
+                0 -> item {
+                    Column {
+                        if (isFootball(item)) VerdictCard(item, state)
+                        Overview(item, prediction, state.extras.notes)
+                    }
+                }
+                1 -> item { if (isFootball(item)) InsightsTab(item, state) else NotForSport(item) }
+                2 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
+                3 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
+                4 -> item { RecentFormTab(item, state.extras) }
+                5 -> item { HeadToHeadTab(item, state.extras) }
+                6 -> item { if (isFootball(item)) BttsTab(item, state.extras) else NotForSport(item) }
+                7 -> item { SquadTab(item, state) }
+                8 -> item { ConditionsTab(item, state) }
+                else -> item {
+                    Column {
+                        if (isFootball(item)) OneXBetSection(item, state, onLoad = { vm.loadOneXBet() }, onSettings = onSettings)
+                        OddsTab(item, odds, prediction)
+                    }
+                }
             }
         }
     }
@@ -159,7 +170,7 @@ private fun NotForSport(item: MatchItem) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun Header(item: MatchItem, state: DetailUiState, onFav: (String) -> Unit) {
+private fun Header(item: MatchItem, state: DetailUiState, onTeam: (String, String) -> Unit, onFav: (String) -> Unit) {
     val zone = LocalZone.current
     val accent = sportColor(item.competition.sport)
     Box(
@@ -177,7 +188,7 @@ private fun Header(item: MatchItem, state: DetailUiState, onFav: (String) -> Uni
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamColumn(item.homeTeam, item.homeCrest, "Home", state.isFavTeam(item.homeTeam), Modifier.weight(1f)) { onFav(item.homeTeam) }
+                TeamColumn(item.homeTeam, item.homeCrest, "Home", state.isFavTeam(item.homeTeam), Modifier.weight(1f), state.homeId?.takeIf { isFootball(item) }?.let { id -> { onTeam(item.competition.key, id) } }) { onFav(item.homeTeam) }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(96.dp)) {
                     when (item.status) {
                         MatchStatus.UPCOMING -> {
@@ -197,7 +208,7 @@ private fun Header(item: MatchItem, state: DetailUiState, onFav: (String) -> Uni
                         }
                     }
                 }
-                TeamColumn(item.awayTeam, item.awayCrest, "Away", state.isFavTeam(item.awayTeam), Modifier.weight(1f)) { onFav(item.awayTeam) }
+                TeamColumn(item.awayTeam, item.awayCrest, "Away", state.isFavTeam(item.awayTeam), Modifier.weight(1f), state.awayId?.takeIf { isFootball(item) }?.let { id -> { onTeam(item.competition.key, id) } }) { onFav(item.awayTeam) }
             }
             val venue = state.extras.venue?.let { v -> listOfNotNull(v, state.extras.city).joinToString(", ") } ?: item.venue
             if (venue != null) {
@@ -209,8 +220,8 @@ private fun Header(item: MatchItem, state: DetailUiState, onFav: (String) -> Uni
 }
 
 @Composable
-private fun TeamColumn(name: String, crest: String?, role: String, fav: Boolean, modifier: Modifier, onFav: () -> Unit) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TeamColumn(name: String, crest: String?, role: String, fav: Boolean, modifier: Modifier, onOpen: (() -> Unit)?, onFav: () -> Unit) {
+    Column(if (onOpen != null) modifier.clickable { onOpen() } else modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         TeamBadge(name, crest, 56.dp)
         Spacer(Modifier.height(6.dp))
         Text(name, style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, maxLines = 2)
@@ -386,7 +397,7 @@ private fun OddsTab(item: MatchItem, odds: OddsSummary?, p: Prediction?) {
             InfoCard {
                 Text("Not in the feed", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Both-teams-to-score and double-chance prices: N/A (not in the free feed). Our probabilities for them are on the Overview tab.",
+                    "Free feed: both-teams-to-score and double-chance prices N/A. Load 1xBet odds above for those markets; our probabilities are on the Overview tab.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

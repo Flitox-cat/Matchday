@@ -1,0 +1,349 @@
+package com.matchday.app.ui.detail
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.matchday.app.data.repo.BookSnapshot
+import com.matchday.app.data.repo.OneXBetRepository
+import com.matchday.app.data.repo.OneXBetState
+import com.matchday.app.domain.Insight
+import com.matchday.app.domain.InsightKind
+import com.matchday.app.domain.MarketLine
+import com.matchday.app.domain.MatchItem
+import com.matchday.app.domain.MatchStatus
+import com.matchday.app.domain.Verdict
+import com.matchday.app.domain.VerdictEngine
+import com.matchday.app.domain.VerdictRating
+import com.matchday.app.ui.Formats
+import com.matchday.app.ui.LocalZone
+import com.matchday.app.ui.components.Banner
+import com.matchday.app.ui.components.EmptyState
+import com.matchday.app.ui.components.InfoCard
+import com.matchday.app.ui.components.KeyValue
+import com.matchday.app.ui.components.MovementArrow
+import com.matchday.app.ui.theme.Accent
+
+private fun ratingColor(r: VerdictRating) = when (r) {
+    VerdictRating.WORTH -> Accent.Green
+    VerdictRating.RISKY -> Accent.Orange
+    VerdictRating.AVOID -> Accent.Red
+}
+
+@Composable
+private fun Pill(text: String, color: Color) {
+    Text(
+        text, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Historical Insights & Interesting Facts
+// ---------------------------------------------------------------------------
+
+@Composable
+fun InsightsTab(item: MatchItem, state: DetailUiState) {
+    val zone = LocalZone.current
+    val h = state.history
+    Column {
+        Text(
+            "Historical Insights & Interesting Facts",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        Banner(
+            "Built from real completed matches in ESPN's free feed (domestic league + UEFA competitions, current and last 3 seasons). " +
+                "Facts lean towards markets but never decide the recommendation on their own.",
+            color = Accent.Blue,
+        )
+        if (h.loading) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = Accent.Purple)
+                Spacer(Modifier.width(10.dp))
+                Text("Researching match history…", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (!h.loading && h.failed && state.extras.headToHead.isEmpty()) {
+            EmptyState("Data unavailable", "Match history couldn't be loaded (offline or source error). Tap reload to try again.")
+        }
+        val cards = state.insights
+        if (!h.loading && cards.isEmpty() && !h.failed) {
+            EmptyState("No notable facts", "Not enough history to say anything reliable about this match.")
+        }
+        cards.forEach { InsightCard(it, zone) }
+        if (h.home != null || h.away != null) {
+            Text(
+                "Matches analysed: ${item.homeTeam} ${h.home?.matches?.size ?: 0}, ${item.awayTeam} ${h.away?.matches?.size ?: 0}. " +
+                    "Updated ${listOfNotNull(h.home?.fetchedAt, h.away?.fetchedAt).minOrNull()?.let { Formats.ago(it) } ?: "N/A"}.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun InsightCard(i: Insight, zone: java.time.ZoneId) {
+    val color = when (i.kind) {
+        InsightKind.WARNING -> Accent.Orange
+        InsightKind.FIRE -> Accent.Red
+        InsightKind.H2H -> Accent.Purple
+        InsightKind.STAT -> Accent.Blue
+        InsightKind.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(i.kind.emoji, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(8.dp))
+            Text(i.title, style = MaterialTheme.typography.titleSmall, color = color, modifier = Modifier.weight(1f))
+            if (i.smallSample && i.matches > 0) Pill("Small sample", Accent.Orange)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(i.statement, style = MaterialTheme.typography.bodyMedium)
+        if (i.metrics.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            i.metrics.forEach { (k, v) -> KeyValue(k, v) }
+        }
+        if (i.leans.isNotEmpty() || i.impact != "None.") {
+            Spacer(Modifier.height(6.dp))
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.10f))
+                    .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(10.dp)).padding(10.dp),
+            ) {
+                Text("Betting impact: ${i.impact}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        val period = if (i.from != null && i.to != null) "${Formats.day(i.from, zone)} – ${Formats.day(i.to, zone)}" else null
+        Text(
+            listOfNotNull(
+                if (i.matches > 0) "${i.matches} match${if (i.matches == 1) "" else "es"} analysed" else null,
+                period,
+                i.competitions.takeIf { it.isNotEmpty() }?.joinToString(", "),
+                "Source: ${i.source}",
+                i.updatedAt?.let { "updated ${Formats.ago(it)}" },
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (i.smallSample && i.matches > 0) {
+            Text(
+                "Fewer than 6 matches: treat as anecdotal, not a trend.",
+                style = MaterialTheme.typography.labelSmall, color = Accent.Orange,
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Advanced Betting Verdict
+// ---------------------------------------------------------------------------
+
+@Composable
+fun VerdictCard(item: MatchItem, state: DetailUiState) {
+    val v: Verdict = state.verdict ?: return
+    val color = ratingColor(v.rating)
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Advanced Betting Verdict", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Pill(v.rating.label, color)
+        }
+        Spacer(Modifier.height(10.dp))
+        Box(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.12f))
+                .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(14.dp)).padding(14.dp),
+        ) {
+            Column {
+                Text(if (v.noBet) "NO BET" else "Best market", style = MaterialTheme.typography.labelMedium, color = color)
+                Text(v.headline, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                v.best?.let { b ->
+                    Text(
+                        "AI ${Formats.pct(b.probability)} · implied ${Formats.pct(b.implied)} · value ${b.edge?.let { com.matchday.app.domain.PredictionEngine.signedPct(it) } ?: "N/A"} · ${b.bookmaker}",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        v.alternative?.let { a ->
+            Spacer(Modifier.height(8.dp))
+            KeyValue("Alternative (also value)", "${a.label} @ ${Formats.odds(a.odds)} (${a.edge?.let { com.matchday.app.domain.PredictionEngine.signedPct(it) }})", Accent.Green)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Reason", style = MaterialTheme.typography.titleSmall)
+        v.reasons.forEach { r ->
+            Row(Modifier.padding(top = 3.dp)) {
+                Text("•  ", color = color)
+                Text(r, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (v.insightNotes.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Historical context", style = MaterialTheme.typography.titleSmall)
+            v.insightNotes.forEach { n ->
+                Text("•  $n", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+            }
+        } else if (state.history.loading) {
+            Text("Historical research still loading…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Odds source: ${v.oddsSource ?: "none"}" + if (v.oddsSource != null && v.oddsSource != "1xBet") " (1xBet prices not loaded - see the Odds tab)." else ".",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 1xBet odds
+// ---------------------------------------------------------------------------
+
+@Composable
+fun OneXBetSection(item: MatchItem, state: DetailUiState, onLoad: () -> Unit, onSettings: () -> Unit) {
+    val zone = LocalZone.current
+    val st = state.oneXBet
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("1xBet odds", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (state.oneXBetLoading) CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = Accent.Purple)
+        }
+        Spacer(Modifier.height(4.dp))
+        when (st) {
+            is OneXBetState.NotConfigured -> {
+                Text(
+                    "Not connected. 1xBet has no public odds API and its website can't be read without bypassing its protections, so Matchday gets genuine 1xBet prices through The Odds API, a licensed odds aggregator that lists 1xBet. Add your own free key (500 credits a month) in Settings.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onSettings, colors = ButtonDefaults.buttonColors(containerColor = Accent.Blue)) { Text("Add key in Settings") }
+            }
+            is OneXBetState.NotLoaded -> {
+                Text(
+                    "Prices aren't loaded for this match yet. Loading uses about ${OneXBetRepository.CREDIT_ESTIMATE} credits of your free plan" +
+                        (if (state.creditsLeft >= 0) " (${state.creditsLeft} left)." else "."),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                if (item.status == MatchStatus.UPCOMING) {
+                    Button(onClick = onLoad, enabled = !state.oneXBetLoading, colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Load 1xBet odds") }
+                }
+            }
+            is OneXBetState.Unsupported -> Text(st.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            is OneXBetState.Unavailable -> {
+                Text("Data unavailable: ${st.reason}", style = MaterialTheme.typography.bodySmall, color = Accent.Orange)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onLoad, enabled = !state.oneXBetLoading) { Text("Try again") }
+            }
+            is OneXBetState.Ok -> OneXBetTable(item, state, st.current, st.history, onLoad, zone)
+        }
+    }
+}
+
+@Composable
+private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapshot, history: List<BookSnapshot>, onLoad: () -> Unit, zone: java.time.ZoneId) {
+    val p = state.extras.prediction ?: item.prediction
+    val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", p, state.extras.btts)
+    val previous = history.dropLast(1).lastOrNull()
+    val first = history.firstOrNull()?.takeIf { history.size > 1 }
+    Text(
+        "Genuine 1xBet prices via The Odds API. 1xBet last updated ${Formats.dayTime(snap.bookUpdatedAt, zone)}; downloaded ${Formats.ago(snap.fetchedAt)}.",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(8.dp))
+    val groups = listOf("1X2" to "Match result (1X2)", "DC" to "Double chance", "DNB" to "Draw no bet",
+        "OU" to "Total goals", "BTTS" to "Both teams to score", "1H" to "First-half result")
+    Row(Modifier.fillMaxWidth()) {
+        Text("Selection", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        listOf("Odds", "Implied", "AI", "Value").forEach {
+            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.width(54.dp))
+        }
+    }
+    groups.forEach { (g, title) ->
+        val rows = lines.filter { it.group == g }.sortedWith(compareBy({ it.point ?: 0.0 }, { it.sel }))
+        if (rows.isEmpty()) return@forEach
+        Spacer(Modifier.height(8.dp))
+        Text(title, style = MaterialTheme.typography.titleSmall, color = Accent.Purple)
+        rows.forEach { l ->
+            val prev = previous?.find(l.group, l.sel, l.point)?.price
+            LineRow(l, prev)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 4.dp))
+    }
+    val missing = groups.filter { (g, _) -> lines.none { it.group == g } }.map { it.second }
+    if (missing.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
+        Text("Not offered by 1xBet for this match (or not in the source): ${missing.joinToString(", ")}.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (first != null) {
+        Spacer(Modifier.height(10.dp))
+        Text("Odds movement", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Since ${Formats.dayTime(first.fetchedAt, zone)} (${history.size} snapshots saved on this phone):",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        lines.filter { it.group == "1X2" || (it.group == "OU" && it.point == 2.5) || it.group == "BTTS" }.forEach { l ->
+            val was = first.find(l.group, l.sel, l.point)?.price
+            if (was != null && was != l.odds) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(l.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${Formats.odds(was)} → ${Formats.odds(l.odds)}", style = MaterialTheme.typography.bodySmall)
+                    MovementArrow(l.odds, was)
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "Value = AI probability × 1xBet odds − 1 (green at +3% or more). First-half prices have no AI model, so value isn't shown for them." +
+            if (state.creditsLeft >= 0) " Credits left this month: ${state.creditsLeft}." else "",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (item.status == MatchStatus.UPCOMING) {
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(onClick = onLoad, enabled = !state.oneXBetLoading) { Text("Refresh 1xBet odds (~${OneXBetRepository.CREDIT_ESTIMATE} credits)") }
+    }
+}
+
+@Composable
+private fun LineRow(l: MarketLine, previous: Double?) {
+    val edge = l.edge
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+        Text(l.label, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Row(Modifier.width(54.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text(Formats.odds(l.odds), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Accent.Green)
+            MovementArrow(l.odds, previous)
+        }
+        Text(Formats.pct(l.implied), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End, modifier = Modifier.width(54.dp))
+        Text(Formats.pct(l.probability), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End, modifier = Modifier.width(54.dp))
+        Text(
+            edge?.let { com.matchday.app.domain.PredictionEngine.signedPct(it) } ?: "N/A",
+            style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End, modifier = Modifier.width(54.dp),
+            fontWeight = if (l.isValue) FontWeight.Bold else FontWeight.Normal,
+            color = when { edge == null -> MaterialTheme.colorScheme.onSurfaceVariant; edge >= 0.03 -> Accent.Green; edge < 0 -> Accent.Red; else -> Accent.Orange },
+        )
+    }
+}

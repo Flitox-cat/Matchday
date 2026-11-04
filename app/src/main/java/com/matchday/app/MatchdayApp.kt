@@ -6,6 +6,8 @@ import com.matchday.app.data.local.AppDatabase
 import com.matchday.app.data.local.SettingsStore
 import com.matchday.app.data.repo.JsonCache
 import com.matchday.app.data.repo.MatchRepository
+import com.matchday.app.data.repo.OneXBetRepository
+import com.matchday.app.data.repo.TeamRepository
 import com.matchday.app.data.repo.WeatherRepository
 import com.matchday.app.work.Notifications
 import com.matchday.app.work.RefreshScheduler
@@ -21,6 +23,8 @@ class AppContainer(context: Context) {
     val cache = JsonCache(db.cache())
     val weather = WeatherRepository(cache)
     val matches = MatchRepository(db, settings, weather, cache)
+    val teams = TeamRepository(db, cache)
+    val oneXBet = OneXBetRepository(cache, settings)
 }
 
 class MatchdayApp : Application() {

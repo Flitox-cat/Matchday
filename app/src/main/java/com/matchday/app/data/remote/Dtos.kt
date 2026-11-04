@@ -253,7 +253,14 @@ data class ETeamResponse(val team: ETeamFull? = null)
 data class EScheduleTeam(val standingSummary: String? = null)
 
 @Serializable
-data class ESchedule(val events: List<EEvent> = emptyList(), val team: EScheduleTeam? = null)
+data class ESchedule(
+    val events: List<EEvent> = emptyList(),
+    val team: EScheduleTeam? = null,
+    val season: ESeasonYear? = null,
+)
+
+@Serializable
+data class ESeasonYear(val year: Int? = null, val displayName: String? = null)
 
 /** sports.core.api.espn.com team record: used for the club's country (stadium address). */
 @Serializable
@@ -305,3 +312,59 @@ data class HourlyDto(
 
 @Serializable
 data class ForecastResponse(val hourly: HourlyDto? = null)
+
+// ---------------------------------------------------------------------------
+// ESPN search (site.web.api.espn.com/apis/common/v3/search) - no key
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class ESearchItem(
+    val id: String? = null,
+    val displayName: String? = null,
+    val type: String? = null,
+    val sport: String? = null,
+    val league: String? = null,
+    val defaultLeagueSlug: String? = null,
+    val location: String? = null,
+)
+
+@Serializable
+data class ESearchResponse(val items: List<ESearchItem> = emptyList())
+
+// ---------------------------------------------------------------------------
+// The Odds API (the-odds-api.com) - used ONLY for genuine 1xBet prices (bookmaker key "onexbet").
+// Optional: needs the user's own free key.
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class OEvent(
+    val id: String = "",
+    @kotlinx.serialization.SerialName("sport_key") val sportKey: String? = null,
+    @kotlinx.serialization.SerialName("commence_time") val commenceTime: String? = null,
+    @kotlinx.serialization.SerialName("home_team") val homeTeam: String? = null,
+    @kotlinx.serialization.SerialName("away_team") val awayTeam: String? = null,
+    val bookmakers: List<OBookmaker> = emptyList(),
+)
+
+@Serializable
+data class OBookmaker(
+    val key: String = "",
+    val title: String = "",
+    @kotlinx.serialization.SerialName("last_update") val lastUpdate: String? = null,
+    val markets: List<OMarket> = emptyList(),
+)
+
+@Serializable
+data class OMarket(
+    val key: String = "",
+    @kotlinx.serialization.SerialName("last_update") val lastUpdate: String? = null,
+    val outcomes: List<OOutcome> = emptyList(),
+)
+
+@Serializable
+data class OOutcome(
+    val name: String = "",
+    val price: Double = 0.0,
+    val point: Double? = null,
+    val description: String? = null,
+)

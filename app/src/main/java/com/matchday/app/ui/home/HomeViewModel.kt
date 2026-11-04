@@ -4,12 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.matchday.app.AppContainer
 import com.matchday.app.data.local.AppSettings
+import com.matchday.app.domain.Catalog
 import com.matchday.app.domain.Competition
 import com.matchday.app.domain.MatchItem
 import com.matchday.app.domain.MatchStatus
 import com.matchday.app.domain.SportType
 import com.matchday.app.ui.Formats
 import com.matchday.app.ui.zone
+import com.matchday.app.data.repo.SearchHit
+import com.matchday.app.domain.TeamMatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +48,55 @@ data class HomeUiState(
     val loadedOnce: Boolean = false,
 )
 
+/** One search suggestion, enriched with what the app already knows locally. */
+data class SearchResult(
+    val hit: SearchHit,
+    val position: Int? = null,
+    val next: MatchItem? = null,
+    val last: MatchItem? = null,
+)
+
+data class SearchState(val query: String = "", val searching: Boolean = false, val results: List<SearchResult> = emptyList())
+
 class HomeViewModel(private val c: AppContainer) : ViewModel() {
+    private val _search = MutableStateFlow(SearchState())
+    val search: StateFlow<SearchState> = _search
+    private var searchJob: Job? = null
+
+    /** Debounced search: local clubs/competitions instantly, ESPN's public search after 350 ms. */
+    fun setQuery(q: String) {
+        _search.value = _search.value.copy(query = q)
+        searchJob?.cancel()
+        if (q.trim().length < 2) { _search.value = SearchState(q); return }
+        searchJob = viewModelScope.launch {
+            delay(200)
+            _search.value = _search.value.copy(searching = true)
+            val local = withContext(Dispatchers.IO) { runCatching { c.teams.searchLocal(q) }.getOrDefault(emptyList()) }
+            _search.value = _search.value.copy(results = enrich(local))
+            delay(150)
+            val remote = withContext(Dispatchers.IO) { runCatching { c.teams.searchRemote(q) }.getOrDefault(emptyList()) }
+            val merged = local + remote.filter { r -> local.none { it.id == r.id || (it.kind == r.kind && TeamMatcher.same(it.name, r.name)) } }
+            _search.value = _search.value.copy(searching = false, results = enrich(merged.take(14)))
+        }
+    }
+
+    fun clearSearch() { searchJob?.cancel(); _search.value = SearchState() }
+
+    private suspend fun enrich(hits: List<SearchHit>): List<SearchResult> {
+        val all = state.value.let { st -> st.live + st.today + st.tomorrow + st.upcomingPopular + st.completed }.ifEmpty { null }
+            ?: runCatching { c.matches.observeMatchesOnce() }.getOrDefault(emptyList())
+        return hits.map { h ->
+            if (h.kind != SearchHit.Kind.TEAM) return@map SearchResult(h)
+            val mine = all.filter { TeamMatcher.same(it.homeTeam, h.name) || TeamMatcher.same(it.awayTeam, h.name) }
+            val next = mine.filter { it.status != MatchStatus.FINISHED }.minByOrNull { it.kickoff }
+            val last = mine.filter { it.status == MatchStatus.FINISHED }.maxByOrNull { it.kickoff }
+            val table = h.leagueKey?.takeIf { Catalog.find(it).hasTable }?.let { k ->
+                withContext(Dispatchers.IO) { runCatching { c.matches.cachedTable(k) }.getOrNull() }
+            }
+            SearchResult(h, table?.row(h.id, h.name)?.rank, next, last)
+        }
+    }
+
     private val filters = MutableStateFlow(HomeFilters())
     val refreshing: StateFlow<Boolean> = c.matches.refreshing
     val messages: StateFlow<List<String>> = c.matches.messages

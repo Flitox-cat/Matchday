@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write   # lets the job publish its log to the ci-build-log branch
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,10 +27,24 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: matchday-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish build log (ci-build-log branch)
+        if: always()
+        run: |
+          RESULT=${{ job.status }}
+          grep -E "^e: |^w: .*error|What went wrong|BUILD (SUCCESSFUL|FAILED)" -A3 build.log > summary.log || true
+          cp build.log full.log 2>/dev/null || true
+          git config user.name Matchday; git config user.email matchday@users.noreply.github.com
+          git checkout -q --orphan buildlog
+          git rm -rfq --cached . >/dev/null
+          git add -f summary.log
+          git commit -qm "${GITHUB_SHA::7} ${RESULT}"
+          git push -qf origin HEAD:ci-build-log

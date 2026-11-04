@@ -43,6 +43,19 @@ check() {
   if adb logcat -d -b crash | grep -q "FATAL EXCEPTION"; then echo "=== CRASH after: $1"; FAIL=1; fi
 }
 
+# Type in the Home search box, open the first team result, scroll its page, go back.
+search_flow() {
+  tap_text "Home"; sleep 3
+  tap_text "Search teams or competitions"; sleep 2
+  adb shell input text "madrid"; sleep 8; check "$1 search typed"; screen_texts
+  adb shell input keyevent 111; sleep 1   # hide keyboard
+  tap_text "Team"; sleep 20; check "$1 team page"; screen_texts
+  adb shell input swipe 500 1600 500 400 300; sleep 3; screen_texts
+  adb shell input swipe 500 1600 500 400 300; sleep 3; check "$1 team page scrolled"; screen_texts
+  adb shell input keyevent 4; sleep 4; check "$1 back from team"
+  tap_text "Clear search"; sleep 3; check "$1 search cleared"
+}
+
 run_pass() {
   label=$1
   adb shell am force-stop $PKG
@@ -60,10 +73,14 @@ run_pass() {
   tap_text "X"; sleep 2
   dump; grep -q '"Overview"' ui.xml || { tap_text "1"; sleep 2; }
   sleep 8; check "$label open match"; screen_texts
+  tap_text "Insights"; sleep 20; check "$label match tab Insights"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   for t in Teams Table Form H2H BTTS Squad Venue Odds Overview; do
     tap_text "$t"; sleep 6; check "$label match tab $t"; screen_texts
   done
+  adb shell input swipe 500 1500 500 700 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4; check "$label back to list"
+  search_flow "$label"
   # Rotate to landscape and back (configuration change)
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 1; sleep 5; check "$label landscape"
@@ -91,6 +108,7 @@ sleep 3
 adb shell am start -W -n $PKG/.MainActivity >/dev/null
 sleep 20; check "empty-offline launch"; screen_texts
 for tab in Predictions Live Favourites Settings Home; do tap_text "$tab"; sleep 5; check "empty-offline tab $tab"; done
+search_flow "empty-offline"
 adb shell cmd connectivity airplane-mode disable 2>/dev/null; adb shell svc wifi enable; adb shell svc data enable
 
 echo "########## MEMORY ##########"
@@ -99,7 +117,7 @@ adb shell dumpsys meminfo $PKG | grep -E "TOTAL PSS|TOTAL RSS|Java Heap|Native H
 echo "=================== CRASH BUFFER ==================="
 adb logcat -d -b crash
 echo "=================== APP WARNINGS/ERRORS ==================="
-adb logcat -d | grep -E "MatchRepository|HomeViewModel|AndroidRuntime: (FATAL|java|Caused)" | tail -60
+adb logcat -d | grep -E "MatchRepository|TeamRepository|OneXBet|HomeViewModel|AndroidRuntime: (FATAL|java|Caused)" | tail -60
 
 if [ $FAIL -ne 0 ]; then echo "SMOKE TEST FAILED"; exit 1; fi
 echo "SMOKE TEST PASSED"
