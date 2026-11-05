@@ -275,13 +275,14 @@ private fun OneXBetForm(item: MatchItem, current: BookSnapshot?, onCancel: () ->
         }
     }
     val titles = mapOf("1X2" to "Match result (1X2)", "OU" to "Total goals", "BTTS" to "Both teams to score",
-        "DC" to "Double chance", "DNB" to "Draw no bet", "1H" to "First-half result")
+        "DC" to "Double chance", "DNB" to "Draw no bet", "1H" to "First-half result",
+        "1HOU" to "First-half goals", "1HBTTS" to "First-half BTTS", "TT" to "Team goals")
     Text("Fill in only the markets you want analysed (decimal odds, e.g. 1.85).", style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     slots.withIndex().groupBy { it.value.market }.forEach { (market, group) ->
         Spacer(Modifier.height(8.dp))
         Text(titles[market] ?: market, style = MaterialTheme.typography.titleSmall, color = Accent.Purple)
-        group.chunked(if (market == "OU") 2 else 3).forEach { row ->
+        group.chunked(if (market in setOf("OU", "1HOU", "TT", "1HBTTS")) 2 else 3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 row.forEach { (i, sl) ->
                     val txt = values[i] ?: ""
@@ -310,7 +311,10 @@ private fun OneXBetForm(item: MatchItem, current: BookSnapshot?, onCancel: () ->
 @Composable
 private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapshot, history: List<BookSnapshot>, zone: java.time.ZoneId) {
     val p = state.extras.prediction ?: item.prediction
-    val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", p, state.extras.btts)
+    val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", p, state.extras.btts).map { l ->
+        if (l.probability != null) l
+        else l.copy(probability = state.markets?.markets?.firstOrNull { it.market == l.group && it.sel == l.sel && it.point == l.point }?.probability)
+    }
     val previous = history.dropLast(1).lastOrNull()
     val first = history.firstOrNull()?.takeIf { history.size > 1 }
     Text(
@@ -321,7 +325,8 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     )
     Spacer(Modifier.height(8.dp))
     val groups = listOf("1X2" to "Match result (1X2)", "DC" to "Double chance", "DNB" to "Draw no bet",
-        "OU" to "Total goals", "BTTS" to "Both teams to score", "1H" to "First-half result")
+        "OU" to "Total goals", "BTTS" to "Both teams to score", "TT" to "Team goals", "1H" to "First-half result",
+        "1HOU" to "First-half goals", "1HBTTS" to "First-half BTTS", "AH" to "Asian handicap")
     Row(Modifier.fillMaxWidth()) {
         Text("Selection", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         listOf("Odds", "Implied", "AI", "Value").forEach {
@@ -365,7 +370,7 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     }
     Spacer(Modifier.height(8.dp))
     Text(
-        "Value = AI probability × 1xBet odds − 1 (green at +3% or more). First-half prices have no AI model, so value isn't shown for them.",
+        "Value = AI probability × 1xBet odds − 1 (green at +3% or more). First-half and team-goal probabilities come from the Markets tab analysis.",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }

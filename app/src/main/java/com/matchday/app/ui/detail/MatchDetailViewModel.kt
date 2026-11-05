@@ -13,6 +13,7 @@ import com.matchday.app.domain.MatchItem
 import com.matchday.app.domain.MatchStatus
 import com.matchday.app.domain.SportType
 import com.matchday.app.domain.TeamHistory
+import com.matchday.app.domain.games
 import com.matchday.app.domain.TeamMatcher
 import com.matchday.app.domain.Verdict
 import com.matchday.app.domain.VerdictEngine
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,6 +48,7 @@ data class DetailUiState(
     val oneXBet: OneXBetState = OneXBetState.NotLoaded,
     val api: OneXApi = OneXApi(),
     val verdict: Verdict? = null,
+    val markets: com.matchday.app.domain.MarketAnalysis? = null,
     val homeId: String? = null,
     val awayId: String? = null,
 ) {
@@ -90,12 +94,15 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                 )
             }.getOrDefault(emptyList())
         } else emptyList()
+        val markets = if (i != null && i.competition.sport == SportType.FOOTBALL) {
+            runCatching { marketsFor(i, x, insights, r.oneX, r.history) }.getOrNull()
+        } else null
         val verdict = if (i != null && i.competition.sport == SportType.FOOTBALL && !x.loading) {
             runCatching { verdictFor(i, x, insights, r.oneX) }.getOrNull()
         } else null
         DetailUiState(
             item = i, extras = x, favourites = f, history = r.history, insights = insights,
-            oneXBet = r.oneX, api = r.api, verdict = verdict,
+            oneXBet = r.oneX, api = r.api, verdict = verdict, markets = markets,
             homeId = r.ids.first, awayId = r.ids.second,
         )
     }.flowOn(Dispatchers.Default)
@@ -105,6 +112,28 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         viewModelScope.launch {
             item.collect { i -> if (i != null && loadJob == null) load(i) }
         }
+        // Track the match page's recommendations (updated until kick-off) for the accuracy report.
+        viewModelScope.launch {
+            state.map { st -> st.item to st.markets?.top.orEmpty() }
+                .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second.map { it.key } == b.second.map { it.key } && a.second.map { it.probability } == b.second.map { it.probability } }
+                .collect { (i, top) -> if (i != null && top.isNotEmpty()) runCatching { c.matches.tracker.record(i, top, "match") } }
+        }
+    }
+
+    private fun marketsFor(i: MatchItem, x: DetailExtras, insights: List<Insight>, o: OneXBetState, h: HistoryState): com.matchday.app.domain.MarketAnalysis? {
+        val p = x.prediction ?: i.prediction ?: return null
+        val lh = p.expectedHome ?: return null
+        val la = p.expectedAway ?: return null
+        val ok = o as? OneXBetState.Ok
+        return com.matchday.app.domain.MarketEngine.analyze(
+            home = i.homeTeam, away = i.awayTeam, lh = lh, la = la, p = p, btts = x.btts,
+            homeGames = h.home?.let { it.games() }.orEmpty().filter { it.m.date < i.kickoff },
+            awayGames = h.away?.let { it.games() }.orEmpty().filter { it.m.date < i.kickoff },
+            h2h = x.headToHead, insights = insights, injuries = x.injuries,
+            prices = ok?.current?.prices, priceSource = ok?.current?.bookmaker,
+            feedPrices = feedPrices(i.odds), feedSource = i.odds?.home?.best?.bookmaker,
+            lineupsConfirmed = x.lineups.isNotEmpty(),
+        )
     }
 
     private fun verdictFor(i: MatchItem, x: DetailExtras, insights: List<Insight>, o: OneXBetState): Verdict {
@@ -201,4 +230,19 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
 
     fun toggleTeam(name: String) = viewModelScope.launch { c.matches.toggleTeam(name) }
     fun toggleCompetition() = viewModelScope.launch { item.value?.let { c.matches.toggleCompetition(it.competition) } }
+}
+
+/** The free feed's prices (main bookmaker) in the same shape as 1xBet prices, labelled with their real source. */
+fun feedPrices(o: com.matchday.app.domain.OddsSummary?): List<com.matchday.app.data.repo.BookPrice> {
+    o ?: return emptyList()
+    val out = mutableListOf<com.matchday.app.data.repo.BookPrice>()
+    o.home?.let { h -> h.best?.let { out += com.matchday.app.data.repo.BookPrice("1X2", "HOME", h.label, null, it.price) } }
+    o.draw?.best?.let { out += com.matchday.app.data.repo.BookPrice("1X2", "DRAW", "Draw", null, it.price) }
+    o.away?.let { a -> a.best?.let { out += com.matchday.app.data.repo.BookPrice("1X2", "AWAY", a.label, null, it.price) } }
+    val line = o.totalsLine
+    if (line != null) {
+        o.over?.best?.let { out += com.matchday.app.data.repo.BookPrice("OU", "OVER", "Over $line", line, it.price) }
+        o.under?.best?.let { out += com.matchday.app.data.repo.BookPrice("OU", "UNDER", "Under $line", line, it.price) }
+    }
+    return out
 }

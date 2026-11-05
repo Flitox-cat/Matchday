@@ -53,24 +53,61 @@ import com.matchday.app.ui.theme.Accent
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
+import com.matchday.app.data.repo.AccuracyReport
+import com.matchday.app.domain.MarketEngine
+import com.matchday.app.domain.MarketPick
+import com.matchday.app.domain.SportType
 import kotlinx.coroutines.flow.stateIn
+
+/** One entry of "Today's Best Betting Opportunities": the strongest market of one match. */
+data class Opportunity(val match: MatchItem, val pick: MarketPick)
 
 data class PredictionsUiState(
     val picks: BestPicks = BestPicks(null, emptyList(), emptyList(), emptyList(), emptyList()),
     val all: List<MatchItem> = emptyList(),
     val loaded: Boolean = false,
+    val opportunities: List<Opportunity> = emptyList(),
+    val accuracy: AccuracyReport? = null,
 )
 
-class PredictionsViewModel(c: AppContainer) : ViewModel() {
-    val state: StateFlow<PredictionsUiState> = c.matches.observeMatches().map { list ->
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class PredictionsViewModel(private val c: AppContainer) : ViewModel() {
+    val state: StateFlow<PredictionsUiState> = c.matches.observeMatches().mapLatest { list ->
         val now = System.currentTimeMillis()
         val upcoming = list.filter { it.status == MatchStatus.UPCOMING && it.prediction != null && it.kickoff <= now + 48 * 3_600_000L }
+        val opps = runCatching { opportunities(list, now) }.getOrDefault(emptyList())
+        // Track today's ranking for the accuracy report (top 10).
+        opps.take(10).forEach { o -> runCatching { c.matches.tracker.record(o.match, listOf(o.pick), "daily") } }
         PredictionsUiState(
             picks = BestPicksRanker.rank(list, now),
             all = upcoming.sortedWith(compareByDescending<MatchItem> { it.prediction!!.confidence.ordinal }.thenBy { it.kickoff }),
             loaded = true,
+            opportunities = opps,
+            accuracy = runCatching { c.matches.tracker.report() }.getOrNull(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PredictionsUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PredictionsUiState())
+
+    /** Best market of each football match kicking off in the next 24 hours, ranked by probability. */
+    private suspend fun opportunities(list: List<MatchItem>, now: Long): List<Opportunity> =
+        list.filter { it.status == MatchStatus.UPCOMING && it.competition.sport == SportType.FOOTBALL && it.kickoff in now..(now + 24 * 3_600_000L) }
+            .mapNotNull { m ->
+                val p = m.prediction ?: return@mapNotNull null
+                if (p.completeness < 0.5) return@mapNotNull null
+                val lh = p.expectedHome ?: return@mapNotNull null
+                val la = p.expectedAway ?: return@mapNotNull null
+                val saved = runCatching { c.oneXBet.state(m) }.getOrNull() as? com.matchday.app.data.repo.OneXBetState.Ok
+                val markets = MarketEngine.analyze(
+                    m.homeTeam, m.awayTeam, lh, la, p, null, emptyList(), emptyList(), emptyList(), emptyList(), null,
+                    saved?.current?.prices, saved?.current?.bookmaker,
+                    com.matchday.app.ui.detail.feedPrices(m.odds), m.odds?.home?.best?.bookmaker, false,
+                ).top
+                markets.firstOrNull()?.let { Opportunity(m, it) }
+            }
+            .sortedByDescending { it.pick.probability }
+            .take(15)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +135,17 @@ fun PredictionsScreen(vm: PredictionsViewModel, onMatch: (String) -> Unit) {
             if (state.loaded && state.all.isEmpty()) {
                 item { EmptyState("No predictions yet", "Refresh on the Home tab. Predictions appear for matches in the next 48 hours that have odds or team statistics.") }
             }
+            if (state.opportunities.isNotEmpty()) {
+                item { SectionHeader("Today's Best Betting Opportunities", Accent.Green, state.opportunities.size) }
+                item {
+                    Text(
+                        "Every market of every match in the next 24 h compared; the strongest of each match, ranked by probability. Quick view from the goals model and saved prices: open a match for the full analysis.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                    )
+                }
+                items(state.opportunities, key = { "opp_${it.match.id}" }) { OpportunityRow(it, onMatch) }
+            }
             p.bestOverall?.let { best ->
                 item { SectionHeader("Best overall selection", Accent.Green) }
                 item { PickCard(best, Accent.Green, onMatch, big = true) }
@@ -116,6 +164,10 @@ fun PredictionsScreen(vm: PredictionsViewModel, onMatch: (String) -> Unit) {
             if (state.all.isNotEmpty()) {
                 item { SectionHeader("All predictions", Color(0xFF7D879E), state.all.size) }
                 items(state.all, key = { "all_${it.id}" }) { m -> MatchCard(m, onClick = { onMatch(m.id) }) }
+            }
+            state.accuracy?.let { a ->
+                item { SectionHeader("Prediction accuracy", Accent.Blue) }
+                item { AccuracyCard(a) }
             }
         }
     }
@@ -239,5 +291,92 @@ private fun AvoidCard(a: AvoidItem, onMatch: (String) -> Unit) {
             Text(Formats.kickoffLabel(a.match.kickoff, zone), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(a.why, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun OpportunityRow(o: Opportunity, onMatch: (String) -> Unit) {
+    val zone = LocalZone.current
+    val pk = o.pick
+    val c = when { pk.probability >= 0.75 -> Accent.Green; pk.probability >= 0.6 -> Accent.Orange; else -> Accent.Red }
+    Card(
+        onClick = { onMatch(o.match.id) },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${o.match.homeTeam} vs ${o.match.awayTeam}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${o.match.competition.title} · ${Formats.kickoffLabel(o.match.kickoff, zone)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("${Math.round(pk.probability * 100)}%", style = MaterialTheme.typography.titleLarge, color = c, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(pk.label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(pk.odds?.let { "${Formats.odds(it)} · ${pk.bookmaker ?: ""}" } ?: "1xBet odds: not loaded", style = MaterialTheme.typography.labelSmall,
+                    color = if (pk.odds == null) MaterialTheme.colorScheme.onSurfaceVariant else Accent.Green)
+            }
+            Text(pk.family.label + " · " + (pk.evidence.firstOrNull() ?: ""), style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun AccuracyCard(a: AccuracyReport) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            if (a.rows.isEmpty()) {
+                Text("No settled recommendations yet. Every pick the app makes is saved on this phone and checked against the final score after the match.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("Market" to 1.6f, "Settled" to 0.8f, "Won" to 0.7f, "Hit rate" to 0.9f, "Expected" to 0.9f).forEach { (t, w) ->
+                        Text(t, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(w))
+                    }
+                }
+                a.rows.forEach { r ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Text(r.category, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1.6f), maxLines = 2)
+                        Text("${r.settled}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(0.8f))
+                        Text("${r.won}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(0.7f))
+                        Text("${Math.round(r.hitRate * 100)}%", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.9f),
+                            color = if (r.hitRate >= r.avgPredicted - 0.05) Accent.Green else Accent.Red)
+                        Text("${Math.round(r.avgPredicted * 100)}%", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(0.9f))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Calibration (does 70% happen about 70% of the time?)", style = MaterialTheme.typography.titleSmall)
+                a.calibration.forEach { c ->
+                    Text("Predicted ${c.range}: ${c.n} picks, expected ${Math.round(c.predicted * 100)}%, actual ${Math.round(c.actual * 100)}%",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp),
+                        color = if (kotlin.math.abs(c.actual - c.predicted) <= 0.08) MaterialTheme.colorScheme.onSurface else Accent.Orange)
+                }
+                a.brier?.let { Text("Brier score: ${String.format("%.3f", it)} (lower is better; 0.25 = coin-flip guessing)", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+                if (a.rows.sumOf { it.settled } < 30) Text("Fewer than 30 settled picks: too early to judge calibration.", style = MaterialTheme.typography.labelSmall, color = Accent.Orange)
+            }
+            Text("Pending: ${a.pending} · Void/unsettleable: ${a.voided} (draw-no-bet refunds, first-goal markets, missing half-time scores)",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            if (a.recent.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text("Latest results", style = MaterialTheme.typography.titleSmall)
+                a.recent.take(10).forEach { t ->
+                    Row(Modifier.fillMaxWidth().padding(top = 3.dp)) {
+                        Text(if (t.void) "–" else if (t.result == true) "✓" else "✗", color = if (t.void) Color.Gray else if (t.result == true) Accent.Green else Accent.Red,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.width(18.dp))
+                        Text("${t.home} ${t.score ?: ""} ${t.away}: ${t.label} (${Math.round(t.probability * 100)}%)",
+                            style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
     }
 }

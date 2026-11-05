@@ -102,6 +102,7 @@ class MatchRepository(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val footballData = FootballDataRepository(cache, settings)
+    val tracker = PickTracker(cache)
     private val apiFootball = ApiFootballRepository(cache, settings)
     private val espn = Network.espn
     private val refreshMutex = Mutex()
@@ -166,6 +167,8 @@ class MatchRepository(
             }
         }
 
+        // Settle tracked recommendations before old matches are removed.
+        runCatching { tracker.settle(db.matches().since(now - 3 * DAY).filter { it.state == "post" }) }
         db.matches().deleteBefore(now - 2 * DAY)
         db.notified().deleteBefore(now - 7 * DAY)
         db.cache().deleteBefore(now - 30 * DAY)
@@ -190,6 +193,20 @@ class MatchRepository(
         }.filter { comp.sport != SportType.TENNIS || it.kickoff >= now - 2 * DAY }
             .distinctBy { it.id }
         if (rows.isNotEmpty()) db.matches().upsert(rows)
+        // Half-time scores of finished football matches (to settle first-half picks).
+        if (comp.sport == SportType.FOOTBALL) runCatching {
+            val ht = HashMap<String, String>()
+            okBoards.flatMap { it.events }.forEach { e ->
+                val c = e.competitions.firstOrNull() ?: return@forEach
+                val done = (c.status ?: e.status)?.type?.let { it.completed || it.state == "post" } == true
+                if (!done) return@forEach
+                val h = c.competitors.firstOrNull { it.homeAway == "home" }?.linescores?.firstOrNull()?.value
+                val a = c.competitors.firstOrNull { it.homeAway == "away" }?.linescores?.firstOrNull()?.value
+                val id = rows.firstOrNull { it.eventId == e.id }?.id
+                if (h != null && a != null && id != null) ht[id] = "${h.toInt()}-${a.toInt()}"
+            }
+            tracker.saveHalfTimes(ht)
+        }
         // Drop matches removed from the feed (only when every day loaded, so nothing is lost on errors).
         if (okBoards.size == boards.size && comp.sport != SportType.TENNIS) {
             val from = days.first().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()

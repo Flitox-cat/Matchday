@@ -72,7 +72,9 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
         const val SOURCE_MANUAL = "1xBet (entered by you)"
         private const val MARKETS = "h2h,totals,alternate_totals,btts,draw_no_bet,double_chance,h2h_3_way_h1"
         private const val MARKETS_FALLBACK = "h2h,totals,btts,draw_no_bet"
-        const val CREDIT_ESTIMATE = 7
+        /** Extra markets, asked in a second call so an unsupported one never loses the main markets. */
+        private const val MARKETS_EXTRA = "team_totals,totals_h1,btts_h1,spreads"
+        const val CREDIT_ESTIMATE = 11
 
         /** ESPN league key -> The Odds API sport key (football only). */
         private val SPORT = mapOf(
@@ -96,14 +98,24 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
 
         fun slots(home: String, away: String): List<OddsSlot> = listOf(
             OddsSlot("1X2", "HOME", null, home), OddsSlot("1X2", "DRAW", null, "Draw"), OddsSlot("1X2", "AWAY", null, away),
+            OddsSlot("OU", "OVER", 0.5, "Over 0.5"), OddsSlot("OU", "UNDER", 0.5, "Under 0.5"),
             OddsSlot("OU", "OVER", 1.5, "Over 1.5"), OddsSlot("OU", "UNDER", 1.5, "Under 1.5"),
             OddsSlot("OU", "OVER", 2.5, "Over 2.5"), OddsSlot("OU", "UNDER", 2.5, "Under 2.5"),
             OddsSlot("OU", "OVER", 3.5, "Over 3.5"), OddsSlot("OU", "UNDER", 3.5, "Under 3.5"),
+            OddsSlot("OU", "OVER", 4.5, "Over 4.5"), OddsSlot("OU", "UNDER", 4.5, "Under 4.5"),
             OddsSlot("BTTS", "YES", null, "BTTS Yes"), OddsSlot("BTTS", "NO", null, "BTTS No"),
             OddsSlot("DC", "1X", null, "Double chance 1X"), OddsSlot("DC", "X2", null, "Double chance X2"), OddsSlot("DC", "12", null, "Double chance 12"),
             OddsSlot("DNB", "DNB_HOME", null, "$home (DNB)"), OddsSlot("DNB", "DNB_AWAY", null, "$away (DNB)"),
             OddsSlot("1H", "H1_HOME", null, "1st half: $home"), OddsSlot("1H", "H1_DRAW", null, "1st half: Draw"), OddsSlot("1H", "H1_AWAY", null, "1st half: $away"),
-        )
+            OddsSlot("1HOU", "OVER", 0.5, "1H Over 0.5"), OddsSlot("1HOU", "UNDER", 0.5, "1H Under 0.5"),
+            OddsSlot("1HOU", "OVER", 1.5, "1H Over 1.5"), OddsSlot("1HOU", "UNDER", 1.5, "1H Under 1.5"),
+            OddsSlot("1HBTTS", "YES", null, "1H BTTS Yes"), OddsSlot("1HBTTS", "NO", null, "1H BTTS No"),
+        ) + listOf(0.5, 1.5, 2.5).flatMap { l ->
+            listOf(
+                OddsSlot("TT", "HOME_OVER", l, "$home O$l"), OddsSlot("TT", "HOME_UNDER", l, "$home U$l"),
+                OddsSlot("TT", "AWAY_OVER", l, "$away O$l"), OddsSlot("TT", "AWAY_UNDER", l, "$away U$l"),
+            )
+        }
 
         fun parse(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 1.01..1000.0 }
 
@@ -202,7 +214,17 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
             val body = resp.body() ?: return state(item) to "Empty response from The Odds API."
             val bm = body.bookmakers.firstOrNull { it.key == "onexbet" }
                 ?: return state(item) to "1xBet hasn't published prices for this match yet."
-            val snap = parse(bm, body.homeTeam ?: ev.homeTeam ?: "", body.awayTeam ?: ev.awayTeam ?: "")
+            val homeName = body.homeTeam ?: ev.homeTeam ?: ""
+            val awayName = body.awayTeam ?: ev.awayTeam ?: ""
+            var snap = parse(bm, homeName, awayName)
+            // Extra markets (team goals, first half, handicap): best effort, never fatal.
+            if (snap.prices.isNotEmpty()) runCatching {
+                val extra = api.eventOdds(sport, ev.id, key, MARKETS_EXTRA)
+                extra.headers()["x-requests-remaining"]?.toDoubleOrNull()?.toInt()?.let { settings.setOddsApiRemaining(it) }
+                extra.body()?.bookmakers?.firstOrNull { it.key == "onexbet" }?.let { xb ->
+                    snap = snap.copy(prices = snap.prices + parse(xb, homeName, awayName).prices)
+                }
+            }
             if (snap.prices.isEmpty()) return state(item) to "1xBet hasn't published prices for this match yet."
             append(item, snap) to null
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -263,6 +285,33 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
                         else -> null
                     }
                     if (sel != null) out += BookPrice("DC", sel, "Double chance $sel", null, o.price)
+                }
+                "team_totals", "alternate_team_totals" -> m.outcomes.forEach { o ->
+                    val pt = o.point ?: return@forEach
+                    if (pt !in listOf(0.5, 1.5, 2.5)) return@forEach
+                    val team = o.description ?: return@forEach
+                    val side = if (isHome(team)) "HOME" else if (isAway(team)) "AWAY" else return@forEach
+                    val dir = if (o.name.equals("Over", true)) "OVER" else if (o.name.equals("Under", true)) "UNDER" else return@forEach
+                    if (out.none { it.market == "TT" && it.sel == "${side}_$dir" && it.point == pt })
+                        out += BookPrice("TT", "${side}_$dir", "$team ${o.name} ${fmt(pt)}", pt, o.price)
+                }
+                "totals_h1" -> m.outcomes.forEach { o ->
+                    val pt = o.point ?: return@forEach
+                    val sel = if (o.name.equals("Over", true)) "OVER" else if (o.name.equals("Under", true)) "UNDER" else return@forEach
+                    out += BookPrice("1HOU", sel, "1st half ${o.name} ${fmt(pt)}", pt, o.price)
+                }
+                "btts_h1" -> m.outcomes.forEach { o ->
+                    when {
+                        o.name.equals("Yes", true) -> out += BookPrice("1HBTTS", "YES", "1st half BTTS Yes", null, o.price)
+                        o.name.equals("No", true) -> out += BookPrice("1HBTTS", "NO", "1st half BTTS No", null, o.price)
+                    }
+                }
+                "spreads" -> m.outcomes.forEach { o ->
+                    val pt = o.point ?: return@forEach
+                    when {
+                        isHome(o.name) -> out += BookPrice("AH", "HOME", "${o.name} ${if (pt > 0) "+" else ""}${fmt(pt)}", pt, o.price)
+                        isAway(o.name) -> out += BookPrice("AH", "AWAY", "${o.name} ${if (pt > 0) "+" else ""}${fmt(pt)}", pt, o.price)
+                    }
                 }
                 "h2h_3_way_h1" -> m.outcomes.forEach { o ->
                     when {

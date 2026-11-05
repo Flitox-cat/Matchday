@@ -73,6 +73,9 @@ run_pass() {
   tap_text "X"; sleep 2
   dump; grep -q '"Overview"' ui.xml || { tap_text "1"; sleep 2; }
   sleep 8; check "$label open match"; screen_texts
+  tap_text "Markets"; sleep 10; check "$label match tab Markets"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   tap_text "Insights"; sleep 20; check "$label match tab Insights"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   for t in Teams Table Form H2H BTTS Squad Venue Odds; do
