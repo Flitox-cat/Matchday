@@ -95,6 +95,7 @@ data class Prediction(
     val method: String,
     val completeness: Double,          // 0..1 share of the inputs that were available
     val disagreement: Double?,         // largest model-vs-market gap on any 1X2 outcome
+    val injuryImpact: InjuryImpact? = null,
 ) {
     val doubleChance1X get() = final.draw?.let { final.home + it }
     val doubleChanceX2 get() = final.draw?.let { final.away + it }
@@ -150,7 +151,15 @@ data class InjuryInfo(
     val awayDoubtful: List<String> = emptyList(),
 )
 
-data class LineupPlayer(val name: String, val number: String?, val position: String?)
+/** [photo]: headshot URL from the source, if it publishes one. [grid]: "row:col" on the pitch (row 1 = goalkeeper), if known. */
+data class LineupPlayer(
+    val name: String,
+    val number: String?,
+    val position: String?,
+    val photo: String? = null,
+    val grid: String? = null,
+    val order: Int? = null,
+)
 
 data class LineupInfo(
     val team: String,
@@ -165,4 +174,25 @@ data class ModelInputs(
     val away: TeamStats?,
     val league: LeagueAverages?,
     val injuries: InjuryInfo,
+)
+
+/**
+ * How reported absences changed the prediction: the same calculation with and without them.
+ * Only the statistical model is adjusted; the bookmaker part of the blend ([modelWeight] is the
+ * model's share) usually already prices in injury news, so the final shift is deliberately smaller.
+ */
+data class InjuryImpact(
+    val homeOut: Int,
+    val homeDoubtful: Int,
+    val awayOut: Int,
+    val awayDoubtful: Int,
+    val before: Probs,
+    val after: Probs,
+    val xgBefore: Pair<Double, Double>,
+    val xgAfter: Pair<Double, Double>,
+    val over25Before: Double?,
+    val over25After: Double?,
+    val bttsBefore: Double?,
+    val bttsAfter: Double?,
+    val modelWeight: Double,
 )

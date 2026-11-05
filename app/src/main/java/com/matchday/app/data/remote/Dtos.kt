@@ -188,11 +188,12 @@ data class ESeries(val type: String? = null, val title: String? = null, val even
 data class EPosition(val abbreviation: String? = null, val displayName: String? = null)
 
 @Serializable
-data class ERosterAthlete(val displayName: String? = null, val position: EPosition? = null)
+data class ERosterAthlete(val id: String? = null, val displayName: String? = null, val position: EPosition? = null, val headshot: EHref? = null)
 
 @Serializable
 data class ERosterEntry(
     val starter: Boolean? = null,
+    val formationPlace: String? = null,
     val jersey: String? = null,
     val athlete: ERosterAthlete? = null,
     val position: EPosition? = null,
@@ -424,7 +425,7 @@ data class AfInjury(val player: AfInjuryPlayer = AfInjuryPlayer(), val team: AfT
 data class AfInjuriesResponse(val response: List<AfInjury> = emptyList(), val errors: JsonElement? = null)
 
 @Serializable
-data class AfLineupPlayerInner(val id: Int? = null, val name: String? = null, val number: Int? = null, val pos: String? = null)
+data class AfLineupPlayerInner(val id: Int? = null, val name: String? = null, val number: Int? = null, val pos: String? = null, val grid: String? = null)
 
 @Serializable
 data class AfLineupPlayer(val player: AfLineupPlayerInner = AfLineupPlayerInner())

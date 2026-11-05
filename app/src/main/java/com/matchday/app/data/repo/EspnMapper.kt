@@ -267,6 +267,8 @@ object EspnMapper {
             name = e.athlete?.displayName ?: "?",
             number = e.jersey,
             position = e.position?.abbreviation ?: e.athlete?.position?.abbreviation,
+            photo = e.athlete?.headshot?.href,
+            order = e.formationPlace?.toIntOrNull(),
         )
         LineupInfo(
             team = r.team?.displayName ?: "",

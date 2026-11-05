@@ -138,6 +138,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
                 0 -> item {
                     Column {
                         if (isFootball(item)) VerdictCard(item, state)
+                        (state.extras.prediction ?: item.prediction)?.injuryImpact?.let { InjuryImpactCard(item, it) }
                         Overview(item, prediction, state.extras.notes)
                     }
                 }
@@ -483,8 +484,8 @@ private fun SquadTab(item: MatchItem, state: DetailUiState) {
             InjuryCard(item.homeTeam, x.injuries.homeOut, x.injuries.homeDoubtful)
             InjuryCard(item.awayTeam, x.injuries.awayOut, x.injuries.awayDoubtful)
             Text(
-                "Impact: for football, the model lowers a side's expected goals by 2% per confirmed absence and 0.8% per doubt (max 10%). " +
-                    "It cannot tell a star from a squad player, so check who is missing.",
+                "Impact: each confirmed absence lowers that side's expected goals by 2.5% (doubts 1%, max 12%) and raises the opponent's by 1.5% (doubts 0.6%, max 8%). " +
+                    "The before/after effect on the probabilities is shown on the Overview tab. The model can't tell a star from a squad player, so check who is missing.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
             )
@@ -492,7 +493,11 @@ private fun SquadTab(item: MatchItem, state: DetailUiState) {
         if (x.lineups.isEmpty()) {
             Banner("Line-ups: not confirmed yet. They usually appear 20-60 minutes before kick-off; reopen this match then.", color = Accent.Purple)
         } else {
-            x.lineups.forEach { LineupCard(it) }
+            x.lineups.forEachIndexed { i, l ->
+                val home = com.matchday.app.domain.TeamMatcher.same(l.team, item.homeTeam) ||
+                    (i == 0 && !com.matchday.app.domain.TeamMatcher.same(l.team, item.awayTeam))
+                LineupCardV2(l, home)
+            }
         }
     }
 }

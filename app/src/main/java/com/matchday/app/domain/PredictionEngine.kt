@@ -70,6 +70,32 @@ object PredictionEngine {
         }
         val g = lambdas?.let { grid(it.first, it.second) }
 
+        // ---- injury impact: same weights, model goals without the absences ----
+        val injuryImpact: InjuryImpact? = run {
+            if (inputs == null || modelGoals == null || inputs.home == null || inputs.away == null) return@run null
+            val inj = inputs.injuries
+            if (!inj.known) return@run null
+            if (inj.homeOut.size + inj.homeDoubtful.size + inj.awayOut.size + inj.awayDoubtful.size == 0) return@run null
+            val base = modelLambdas(inputs, applyInjuries = false)
+            val baseModel = outcomeProbs(grid(base.first, base.second))
+            val baseFinal = blend(baseModel, market, wModel)
+            val marketGoals = market?.let { marketLambdas(it, odds) }
+            val baseLambdas = if (marketGoals != null) Pair(
+                wModel * base.first + (1 - wModel) * marketGoals.first,
+                wModel * base.second + (1 - wModel) * marketGoals.second,
+            ) else base
+            val bg = grid(baseLambdas.first, baseLambdas.second)
+            InjuryImpact(
+                homeOut = inj.homeOut.size, homeDoubtful = inj.homeDoubtful.size,
+                awayOut = inj.awayOut.size, awayDoubtful = inj.awayDoubtful.size,
+                before = baseFinal, after = final,
+                xgBefore = base, xgAfter = modelGoals,
+                over25Before = overProb(bg, 2.5), over25After = g?.let { overProb(it, 2.5) },
+                bttsBefore = bttsProb(bg), bttsAfter = g?.let { bttsProb(it) },
+                modelWeight = wModel,
+            )
+        }
+
         val over15 = g?.let { overProb(it, 1.5) }
         val over25 = g?.let { overProb(it, 2.5) }
         val over35 = g?.let { overProb(it, 3.5) }
@@ -143,6 +169,7 @@ object PredictionEngine {
             predictedWinner = predictedWinner, mostLikely = mostLikely, bestValue = bestValue,
             confidence = confidence, confidenceNotes = notes, reasons = reasons,
             method = method, completeness = completeness, disagreement = disagreement,
+            injuryImpact = injuryImpact,
         )
     }
 
@@ -193,7 +220,7 @@ object PredictionEngine {
     private fun shrink(rate: Double, n: Int, prior: Double): Double =
         (rate * n + prior * SHRINK_GAMES) / (n + SHRINK_GAMES)
 
-    private fun modelLambdas(inputs: ModelInputs): Pair<Double, Double> {
+    private fun modelLambdas(inputs: ModelInputs, applyInjuries: Boolean = true): Pair<Double, Double> {
         val h = inputs.home!!
         val a = inputs.away!!
         val avgH = inputs.league?.homeGoals ?: 1.5
@@ -223,9 +250,10 @@ object PredictionEngine {
         la *= formFactor(a.recent)
 
         val inj = inputs.injuries
-        if (inj.known) {
-            lh *= injuryFactor(inj.homeOut.size, inj.homeDoubtful.size)
-            la *= injuryFactor(inj.awayOut.size, inj.awayDoubtful.size)
+        if (applyInjuries && inj.known) {
+            // A depleted side scores less AND concedes more.
+            lh *= injuryFactor(inj.homeOut.size, inj.homeDoubtful.size) * defenceFactor(inj.awayOut.size, inj.awayDoubtful.size)
+            la *= injuryFactor(inj.awayOut.size, inj.awayDoubtful.size) * defenceFactor(inj.homeOut.size, inj.homeDoubtful.size)
         }
         return Pair(lh.coerceIn(0.2, 4.0), la.coerceIn(0.2, 4.0))
     }
@@ -237,9 +265,13 @@ object PredictionEngine {
         return (1 + 0.05 * (ppg - 1.35)).coerceIn(0.93, 1.07)
     }
 
-    /** Absences lower a side's expected goals: 2% per confirmed absence, 0.8% per doubt, max 10%. */
+    /** Absences lower a side's own expected goals: 2.5% per confirmed absence, 1% per doubt, max 12%. */
     private fun injuryFactor(out: Int, doubtful: Int): Double =
-        1 - min(0.10, 0.02 * out + 0.008 * doubtful)
+        1 - min(0.12, 0.025 * out + 0.01 * doubtful)
+
+    /** ...and raise the opponent's: 1.5% per confirmed absence, 0.6% per doubt, max 8%. */
+    private fun defenceFactor(out: Int, doubtful: Int): Double =
+        1 + min(0.08, 0.015 * out + 0.006 * doubtful)
 
     private fun modelQuality(inputs: ModelInputs): Double {
         val h = inputs.home ?: return 0.0

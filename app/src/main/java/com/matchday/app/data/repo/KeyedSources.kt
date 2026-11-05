@@ -196,6 +196,12 @@ class ApiFootballRepository(private val cache: JsonCache, private val settings: 
         }
     }
 
+    /** API-Sports serves player photos from its media CDN by player id (image requests don't use the daily quota). */
+    private fun afPlayer(p: com.matchday.app.data.remote.AfLineupPlayerInner) = LineupPlayer(
+        name = p.name ?: "?", number = p.number?.toString(), position = p.pos,
+        photo = p.id?.let { "https://media.api-sports.io/football/players/$it.png" }, grid = p.grid,
+    )
+
     /** Confirmed line-ups (published about an hour before kick-off). Never throws. */
     suspend fun lineups(item: MatchItem): Sourced<List<LineupInfo>> {
         val untilKickoff = item.kickoff - System.currentTimeMillis()
@@ -209,8 +215,8 @@ class ApiFootballRepository(private val cache: JsonCache, private val settings: 
             Sourced(r.response.filter { it.startXI.isNotEmpty() }.map { l ->
                 LineupInfo(
                     team = l.team.name ?: "?", logo = l.team.logo, formation = l.formation,
-                    starters = l.startXI.map { LineupPlayer(it.player.name ?: "?", it.player.number?.toString(), it.player.pos) },
-                    bench = l.substitutes.map { LineupPlayer(it.player.name ?: "?", it.player.number?.toString(), it.player.pos) },
+                    starters = l.startXI.map { afPlayer(it.player) },
+                    bench = l.substitutes.map { afPlayer(it.player) },
                 )
             }.ifEmpty { null })
         } catch (e: kotlinx.coroutines.CancellationException) {

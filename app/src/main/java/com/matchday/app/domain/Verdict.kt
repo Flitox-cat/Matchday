@@ -156,6 +156,14 @@ object VerdictEngine {
         }
         reasons += "AI probability ${pct(best.probability!!)} vs ${pct(best.implied)} implied by ${best.bookmaker}'s ${String.format("%.2f", best.odds)}: expected value ${signed(edge)} per unit."
         reasons += "Model confidence: ${p.confidence.name.lowercase()}."
+        p.injuryImpact?.let { im ->
+            val now = best.probability ?: 0.0
+            val comparable = best.group in setOf("1X2", "DC", "DNB") || (best.group == "OU" && best.point == 2.5)
+            val before = if (comparable) prob(best.group, best.sel, best.point, p.copy(final = im.before, over25 = im.over25Before ?: p.over25), null) else null
+            if (before != null && kotlin.math.abs(before - now) >= 0.005) {
+                reasons += "Reported absences moved this pick from ${pct(before)} to ${pct(now)}."
+            } else if (before != null) reasons += "Reported absences barely change this pick."
+        }
         if (lowConfidence) reasons += "Low confidence lowers the rating to Risky."
         if (longShot) reasons += "Odds of 3.50+ mean it loses more often than it wins, even with value."
         if (edge > SUSPICIOUS_EDGE) reasons += "An edge above ${pct(SUSPICIOUS_EDGE)} is unusually large: the bookmaker may know something the model doesn't (injuries, rotation)."

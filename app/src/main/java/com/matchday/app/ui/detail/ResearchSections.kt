@@ -422,3 +422,50 @@ private fun ApiStatusBlock(item: MatchItem, state: DetailUiState, onLoadApi: () 
     }
     state.api.message?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Accent.Orange, modifier = Modifier.padding(top = 4.dp)) }
 }
+
+// ---------------------------------------------------------------------------
+// Injury impact (before / after)
+// ---------------------------------------------------------------------------
+
+@Composable
+fun InjuryImpactCard(item: MatchItem, im: com.matchday.app.domain.InjuryImpact) {
+    fun pp(x: Double?) = x?.let { "${Math.round(it * 100)}%" } ?: "N/A"
+    fun fair(x: Double?) = x?.takeIf { it > 0 }?.let { String.format("%.2f", 1 / it) } ?: "N/A"
+    @Composable
+    fun line(label: String, before: Double?, after: Double?, withFair: Boolean = true) {
+        val d = if (before != null && after != null) after - before else null
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${pp(before)} → ${pp(after)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            Text(
+                d?.let { (if (it >= 0) "+" else "") + String.format("%.1f", it * 100) + " pts" } ?: "",
+                style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End, modifier = Modifier.width(66.dp),
+                color = when { d == null || kotlin.math.abs(d) < 0.005 -> MaterialTheme.colorScheme.onSurfaceVariant; d > 0 -> Accent.Green; else -> Accent.Red },
+            )
+            if (withFair) Text("fair ${fair(after)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End, modifier = Modifier.width(64.dp))
+        }
+    }
+    InfoCard {
+        Text("Injury & absence impact", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "${item.homeTeam}: ${im.homeOut} out, ${im.homeDoubtful} doubtful · ${item.awayTeam}: ${im.awayOut} out, ${im.awayDoubtful} doubtful (API-Football).",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text("Expected goals (model): ${String.format("%.2f", im.xgBefore.first)}–${String.format("%.2f", im.xgBefore.second)} → " +
+            "${String.format("%.2f", im.xgAfter.first)}–${String.format("%.2f", im.xgAfter.second)}", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(4.dp))
+        line(item.homeTeam, im.before.home, im.after.home)
+        if (im.before.draw != null) line("Draw", im.before.draw, im.after.draw)
+        line(item.awayTeam, im.before.away, im.after.away)
+        line("Over 2.5", im.over25Before, im.over25After)
+        line("BTTS Yes", im.bttsBefore, im.bttsAfter)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Before = same calculation without the absences. Only the statistical part (${Math.round(im.modelWeight * 100)}% of the blend) is adjusted: " +
+                "bookmaker prices usually already include team news, so it isn't counted twice. Value and the verdict use the 'after' figures.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
