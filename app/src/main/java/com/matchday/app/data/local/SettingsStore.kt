@@ -32,6 +32,11 @@ data class AppSettings(
     val autoLoadOneXBet: Boolean = true,  // load 1xBet odds automatically when a football match opens
     val oddsApiRemaining: Int = -1,       // credits left this month, from the API's response headers
     val oddsApiPausedUntil: Long = 0,     // free credits used up: no API calls before this time (start of next month)
+    val footballDataKey: String = "",     // optional football-data.org key (home/away tables)
+    val footballDataPausedUntil: Long = 0,
+    val apiFootballKey: String = "",      // optional API-Football key (injuries, line-ups)
+    val apiFootballPausedUntil: Long = 0,
+    val apiFootballRemaining: Int = -1,   // from the x-ratelimit-requests-remaining header (remaining today)
 )
 
 class SettingsStore(private val context: Context) {
@@ -51,6 +56,11 @@ class SettingsStore(private val context: Context) {
         val oneXAuto = booleanPreferencesKey("onexbet_auto")
         val oddsRemaining = intPreferencesKey("odds_api_remaining")
         val oddsPaused = longPreferencesKey("odds_api_paused_until")
+        val fdKey = stringPreferencesKey("fd_key")
+        val fdPaused = longPreferencesKey("fd_paused_until")
+        val afKey = stringPreferencesKey("af_key")
+        val afPaused = longPreferencesKey("af_paused_until")
+        val afRemaining = intPreferencesKey("af_remaining")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p -> p.toSettings() }
@@ -73,6 +83,11 @@ class SettingsStore(private val context: Context) {
         autoLoadOneXBet = this[K.oneXAuto] ?: true,
         oddsApiRemaining = this[K.oddsRemaining] ?: -1,
         oddsApiPausedUntil = this[K.oddsPaused] ?: 0L,
+        footballDataKey = this[K.fdKey] ?: "",
+        footballDataPausedUntil = this[K.fdPaused] ?: 0L,
+        apiFootballKey = this[K.afKey] ?: "",
+        apiFootballPausedUntil = this[K.afPaused] ?: 0L,
+        apiFootballRemaining = this[K.afRemaining] ?: -1,
     )
 
     suspend fun toggleLeague(key: String, enabled: Boolean) {
@@ -104,6 +119,11 @@ class SettingsStore(private val context: Context) {
     suspend fun setAutoLoadOneXBet(v: Boolean) { context.dataStore.edit { it[K.oneXAuto] = v } }
     suspend fun setOddsApiRemaining(v: Int) { context.dataStore.edit { it[K.oddsRemaining] = v } }
     suspend fun setOddsApiPausedUntil(v: Long) { context.dataStore.edit { it[K.oddsPaused] = v } }
+    suspend fun setFootballDataKey(v: String) { context.dataStore.edit { it[K.fdKey] = v.trim(); it[K.fdPaused] = 0L } }
+    suspend fun setFootballDataPausedUntil(v: Long) { context.dataStore.edit { it[K.fdPaused] = v } }
+    suspend fun setApiFootballKey(v: String) { context.dataStore.edit { it[K.afKey] = v.trim(); it[K.afPaused] = 0L; it[K.afRemaining] = -1 } }
+    suspend fun setApiFootballPausedUntil(v: Long) { context.dataStore.edit { it[K.afPaused] = v } }
+    suspend fun setApiFootballRemaining(v: Int) { context.dataStore.edit { it[K.afRemaining] = v } }
 
     suspend fun markRefreshed(at: Long) { context.dataStore.edit { it[K.lastRefresh] = at } }
 }

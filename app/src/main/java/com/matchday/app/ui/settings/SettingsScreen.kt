@@ -66,6 +66,8 @@ class SettingsViewModel(private val c: AppContainer, private val appContext: Con
     fun setDark(v: Boolean) = viewModelScope.launch { c.settings.setDark(v) }
     fun setNotify(kind: String, v: Boolean) = viewModelScope.launch { c.settings.setNotify(kind, v) }
     fun setThreshold(v: Int) = viewModelScope.launch { c.settings.setOddsThreshold(v) }
+    fun setFdKey(v: String) = viewModelScope.launch { c.settings.setFootballDataKey(v) }
+    fun setAfKey(v: String) = viewModelScope.launch { c.settings.setApiFootballKey(v) }
     fun setOneXKey(v: String) = viewModelScope.launch { c.settings.setOneXBetKey(v) }
     fun setOneXAuto(v: Boolean) = viewModelScope.launch { c.settings.setAutoLoadOneXBet(v) }
     fun refreshNow() = viewModelScope.launch { c.matches.refresh(force = true) }
@@ -110,6 +112,37 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
 
         item { SectionHeader("1xBet odds", Accent.Orange) }
         item { OneXBetSettings(settings, vm) }
+        item { SectionHeader("Extra data (optional free keys)", Accent.Blue) }
+        item {
+            KeyCard(
+                title = "football-data.org",
+                body = "Adds home and away league tables (the free feed has only the overall table), so predictions weigh home and away form properly. " +
+                    "Free plan: 12 competitions (Champions League, top European leagues, Championship, Brazil, World Cup), 10 requests a minute. Register at football-data.org/client/register; the key arrives by email.",
+                saved = settings.footballDataKey,
+                status = when {
+                    settings.footballDataKey.isBlank() -> null
+                    System.currentTimeMillis() < settings.footballDataPausedUntil -> "Request limit reached: paused for a couple of minutes."
+                    else -> "Used for home/away tables in covered competitions."
+                },
+                onSave = { vm.setFdKey(it) },
+            )
+        }
+        item {
+            KeyCard(
+                title = "API-Football",
+                body = "Adds football injuries, suspensions and confirmed line-ups (about an hour before kick-off). " +
+                    "Free plan: 100 requests a day; each match uses 1-3. Register at dashboard.api-football.com; the key is on the dashboard. " +
+                    "Its free plan may not cover the current season - the app will say so if it doesn't.",
+                saved = settings.apiFootballKey,
+                status = when {
+                    settings.apiFootballKey.isBlank() -> null
+                    System.currentTimeMillis() < settings.apiFootballPausedUntil -> "Daily limit reached: paused until 00:00 UTC (03:00 Qatar). The app keeps working without it."
+                    settings.apiFootballRemaining >= 0 -> "Requests left today: ${settings.apiFootballRemaining}."
+                    else -> "Requests left today: N/A (updates after the first use)."
+                },
+                onSave = { vm.setAfKey(it) },
+            )
+        }
         item { SectionHeader("Competitions", Accent.Purple) }
         item {
             InfoCard {
@@ -248,5 +281,33 @@ private fun OneXBetSettings(settings: AppSettings, vm: SettingsViewModel) {
             Text("When the free credits run out, the app stops calling the API until next month and keeps working normally.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+private fun KeyCard(title: String, body: String, saved: String, status: String?, onSave: (String) -> Unit) {
+    var key by rememberSaveable(title) { mutableStateOf(saved) }
+    var show by remember { mutableStateOf(false) }
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(if (saved.isBlank()) "Not connected" else "Connected", style = MaterialTheme.typography.labelMedium,
+                color = if (saved.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else Accent.Green)
+        }
+        Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = key, onValueChange = { key = it }, singleLine = true, label = { Text("$title key") },
+            visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            Button(onClick = { onSave(key) }) { Text("Save key") }
+            OutlinedButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
+            if (saved.isNotBlank()) OutlinedButton(onClick = { key = ""; onSave("") }) { Text("Remove") }
+        }
+        status?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = if ("paused" in it || "limit" in it) Accent.Orange else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+        Text("Without this key, or when its free limit runs out, the app keeps working with the free data.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

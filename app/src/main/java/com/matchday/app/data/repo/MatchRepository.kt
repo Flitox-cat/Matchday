@@ -101,6 +101,8 @@ class MatchRepository(
     private val cache: JsonCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val footballData = FootballDataRepository(cache, settings)
+    private val apiFootball = ApiFootballRepository(cache, settings)
     private val espn = Network.espn
     private val refreshMutex = Mutex()
     private val gate = Semaphore(6) // be polite to the public feed
@@ -439,6 +441,12 @@ class MatchRepository(
         val table = if (comp.hasTable) tables.value[comp.key] ?: table(comp)?.also { tables.value = tables.value + (comp.key to it) } else null
         var homeStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, entity?.homeId, item.homeTeam, item.homeCrest, entity?.homeForm) else null
         var awayStats = if (comp.sport == SportType.FOOTBALL) EspnMapper.teamStats(table, entity?.awayId, item.awayTeam, item.awayCrest, entity?.awayForm) else null
+        if (comp.sport == SportType.FOOTBALL && FootballDataRepository.covers(comp.key)) {
+            val (h, a, msg) = footballData.withSplits(comp.key, homeStats, awayStats)
+            if (h !== homeStats || a !== awayStats) notes += "Home/away league tables: football-data.org."
+            homeStats = h; awayStats = a
+            msg?.let { notes += it }
+        }
         x = x.copy(homeStats = homeStats, awayStats = awayStats)
         emit(x)
 
@@ -471,6 +479,17 @@ class MatchRepository(
         }
 
         if (comp.sport == SportType.FOOTBALL) {
+            if (!x.injuries.known) {
+                val inj = apiFootball.injuries(item)
+                inj.value?.let { x = x.copy(injuries = it); notes += "Injuries and suspensions: API-Football." }
+                inj.message?.let { notes += it }
+            }
+            if (x.lineups.isEmpty()) {
+                val lu = apiFootball.lineups(item)
+                lu.value?.let { x = x.copy(lineups = it); notes += "Confirmed line-ups: API-Football." }
+                lu.message?.takeIf { it !in notes }?.let { notes += it }
+            }
+            emit(x)
             val (hp, ap) = coroutineScope {
                 val h = async { profile(comp, entity?.homeId, item.homeTeam, item.homeCrest, x.homeRecent) }
                 val a = async { profile(comp, entity?.awayId, item.awayTeam, item.awayCrest, x.awayRecent) }

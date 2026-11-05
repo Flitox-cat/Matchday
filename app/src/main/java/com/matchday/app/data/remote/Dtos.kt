@@ -368,3 +368,74 @@ data class OOutcome(
     val point: Double? = null,
     val description: String? = null,
 )
+
+// ---------------------------------------------------------------------------
+// football-data.org v4 (optional free key) - home/away league tables
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class FdTeam(val id: Int? = null, val name: String? = null, val shortName: String? = null, val tla: String? = null, val crest: String? = null)
+
+@Serializable
+data class FdTableRow(
+    val position: Int = 0,
+    val team: FdTeam = FdTeam(),
+    val playedGames: Int = 0,
+    val won: Int = 0,
+    val draw: Int = 0,
+    val lost: Int = 0,
+    val points: Int = 0,
+    val goalsFor: Int = 0,
+    val goalsAgainst: Int = 0,
+)
+
+@Serializable
+data class FdStanding(val stage: String? = null, val type: String? = null, val group: String? = null, val table: List<FdTableRow> = emptyList())
+
+@Serializable
+data class FdStandingsResponse(val standings: List<FdStanding> = emptyList())
+
+// ---------------------------------------------------------------------------
+// API-Football v3 (optional free key, 100 requests/day) - injuries and line-ups
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class AfTeam(val id: Int? = null, val name: String? = null, val logo: String? = null)
+
+@Serializable
+data class AfTeams(val home: AfTeam = AfTeam(), val away: AfTeam = AfTeam())
+
+@Serializable
+data class AfFixture(val id: Int = 0, val date: String = "")
+
+@Serializable
+data class AfFixtureItem(val fixture: AfFixture = AfFixture(), val teams: AfTeams = AfTeams())
+
+@Serializable
+data class AfFixturesResponse(val response: List<AfFixtureItem> = emptyList(), val errors: JsonElement? = null)
+
+@Serializable
+data class AfInjuryPlayer(val id: Int? = null, val name: String? = null, val type: String? = null, val reason: String? = null)
+
+@Serializable
+data class AfInjury(val player: AfInjuryPlayer = AfInjuryPlayer(), val team: AfTeam = AfTeam())
+
+@Serializable
+data class AfInjuriesResponse(val response: List<AfInjury> = emptyList(), val errors: JsonElement? = null)
+
+@Serializable
+data class AfLineupPlayerInner(val id: Int? = null, val name: String? = null, val number: Int? = null, val pos: String? = null)
+
+@Serializable
+data class AfLineupPlayer(val player: AfLineupPlayerInner = AfLineupPlayerInner())
+
+@Serializable
+data class AfLineup(
+    val team: AfTeam = AfTeam(),
+    val formation: String? = null,
+    val startXI: List<AfLineupPlayer> = emptyList(),
+    val substitutes: List<AfLineupPlayer> = emptyList(),
+)
+
+@Serializable
+data class AfLineupsResponse(val response: List<AfLineup> = emptyList(), val errors: JsonElement? = null)

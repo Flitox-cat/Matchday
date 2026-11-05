@@ -38,6 +38,8 @@ object Network {
     val espnCore: EspnCoreService by lazy { retrofit("https://sports.core.api.espn.com/").create(EspnCoreService::class.java) }
     val espnSearch: EspnSearchService by lazy { retrofit("https://site.web.api.espn.com/").create(EspnSearchService::class.java) }
     val oddsApi: OddsApiService by lazy { retrofit("https://api.the-odds-api.com/").create(OddsApiService::class.java) }
+    val footballData: FootballDataService by lazy { retrofit("https://api.football-data.org/").create(FootballDataService::class.java) }
+    val apiFootball: ApiFootballService by lazy { retrofit("https://v3.football.api-sports.io/").create(ApiFootballService::class.java) }
     val geocoding: GeocodingService by lazy { retrofit("https://geocoding-api.open-meteo.com/").create(GeocodingService::class.java) }
     val weather: WeatherService by lazy { retrofit("https://api.open-meteo.com/").create(WeatherService::class.java) }
 }

@@ -1,6 +1,7 @@
 package com.matchday.app.data.remote
 
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -103,4 +104,35 @@ interface WeatherService {
         @Query("timezone") timezone: String = "UTC",
         @Query("forecast_days") days: Int = 7,
     ): ForecastResponse
+}
+
+/** football-data.org v4 - header X-Auth-Token. Free plan: 12 competitions, 10 requests/minute. */
+interface FootballDataService {
+    @GET("v4/competitions/{code}/standings")
+    suspend fun standings(
+        @Header("X-Auth-Token") token: String,
+        @Path("code") code: String,
+    ): retrofit2.Response<FdStandingsResponse>
+}
+
+/** API-Football v3 - header x-apisports-key. Free plan: 100 requests/day. */
+interface ApiFootballService {
+    @GET("fixtures")
+    suspend fun fixturesByDate(
+        @Header("x-apisports-key") key: String,
+        @Query("date") date: String,
+        @Query("timezone") timezone: String = "UTC",
+    ): retrofit2.Response<AfFixturesResponse>
+
+    @GET("injuries")
+    suspend fun injuries(
+        @Header("x-apisports-key") key: String,
+        @Query("fixture") fixtureId: Int,
+    ): retrofit2.Response<AfInjuriesResponse>
+
+    @GET("fixtures/lineups")
+    suspend fun lineups(
+        @Header("x-apisports-key") key: String,
+        @Query("fixture") fixtureId: Int,
+    ): retrofit2.Response<AfLineupsResponse>
 }
