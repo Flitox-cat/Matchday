@@ -124,6 +124,7 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
                     System.currentTimeMillis() < settings.footballDataPausedUntil -> "Request limit reached: paused for a couple of minutes."
                     else -> "Used for home/away tables in covered competitions."
                 },
+                link = "https://www.football-data.org/client/register",
                 onSave = { vm.setFdKey(it) },
             )
         }
@@ -140,6 +141,7 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
                     settings.apiFootballRemaining >= 0 -> "Requests left today: ${settings.apiFootballRemaining}."
                     else -> "Requests left today: N/A (updates after the first use)."
                 },
+                link = "https://dashboard.api-football.com/register",
                 onSave = { vm.setAfKey(it) },
             )
         }
@@ -250,7 +252,7 @@ private fun OneXBetSettings(settings: AppSettings, vm: SettingsViewModel) {
                 "Its free plan gives 500 credits a month, no card needed; loading one match uses about 7. You can also type 1xBet prices in by hand on any match. Other bookmakers' prices are never shown as 1xBet.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        KeyLink("https://the-odds-api.com/#get-access")
         OutlinedTextField(
             value = key, onValueChange = { key = it }, singleLine = true,
             label = { Text("The Odds API key") },
@@ -285,7 +287,7 @@ private fun OneXBetSettings(settings: AppSettings, vm: SettingsViewModel) {
 }
 
 @Composable
-private fun KeyCard(title: String, body: String, saved: String, status: String?, onSave: (String) -> Unit) {
+private fun KeyCard(title: String, body: String, saved: String, status: String?, link: String, onSave: (String) -> Unit) {
     var key by rememberSaveable(title) { mutableStateOf(saved) }
     var show by remember { mutableStateOf(false) }
     InfoCard {
@@ -295,7 +297,7 @@ private fun KeyCard(title: String, body: String, saved: String, status: String?,
                 color = if (saved.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else Accent.Green)
         }
         Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
+        KeyLink(link)
         OutlinedTextField(
             value = key, onValueChange = { key = it }, singleLine = true, label = { Text("$title key") },
             visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
@@ -310,4 +312,19 @@ private fun KeyCard(title: String, body: String, saved: String, status: String?,
         Text("Without this key, or when its free limit runs out, the app keeps working with the free data.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Small tappable link that opens the provider's free sign-up page in the browser. */
+@Composable
+private fun KeyLink(url: String) {
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    Text(
+        "Get a free key ↗",
+        style = MaterialTheme.typography.labelMedium,
+        color = Accent.Blue,
+        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+        modifier = Modifier
+            .padding(vertical = 8.dp)
+            .clickable { runCatching { uri.openUri(url) } },
+    )
 }
