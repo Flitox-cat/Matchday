@@ -1,6 +1,6 @@
 package com.matchday.app.domain
 
-/** One bookmaker's price for one outcome. Always a real price from The Odds API. */
+/** One bookmaker's price for one outcome. Always a real bookmaker price from the feed. */
 data class PriceQuote(
     val bookmaker: String,
     val price: Double,

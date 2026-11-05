@@ -19,7 +19,16 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.matchday.app.data.repo.BookPrice
 import com.matchday.app.data.repo.BookSnapshot
 import com.matchday.app.data.repo.OneXBetRepository
 import com.matchday.app.data.repo.OneXBetState
@@ -211,7 +221,7 @@ fun VerdictCard(item: MatchItem, state: DetailUiState) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "Odds source: ${v.oddsSource ?: "none"}" + if (v.oddsSource != null && v.oddsSource != "1xBet") " (1xBet prices not loaded - see the Odds tab)." else ".",
+            "Odds source: ${v.oddsSource ?: "none"}" + if (v.oddsSource != null && v.oddsSource != OneXBetRepository.SOURCE) " (enter 1xBet prices on the Odds tab to use them)." else ".",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -222,54 +232,88 @@ fun VerdictCard(item: MatchItem, state: DetailUiState) {
 // ---------------------------------------------------------------------------
 
 @Composable
-fun OneXBetSection(item: MatchItem, state: DetailUiState, onLoad: () -> Unit, onSettings: () -> Unit) {
+fun OneXBetSection(item: MatchItem, state: DetailUiState, onSave: (List<BookPrice>) -> Unit, onClear: () -> Unit) {
     val zone = LocalZone.current
     val st = state.oneXBet
+    var editing by rememberSaveable(item.id) { mutableStateOf(false) }
     InfoCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("1xBet odds", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (state.oneXBetLoading) CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = Accent.Purple)
-        }
+        Text("1xBet odds", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
-        when (st) {
-            is OneXBetState.NotConfigured -> {
-                Text(
-                    "Not connected. 1xBet has no public odds API and its website can't be read without bypassing its protections, so Matchday gets genuine 1xBet prices through The Odds API, a licensed odds aggregator that lists 1xBet. Add your own free key (500 credits a month) in Settings.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onSettings, colors = ButtonDefaults.buttonColors(containerColor = Accent.Blue)) { Text("Add key in Settings") }
-            }
-            is OneXBetState.NotLoaded -> {
-                Text(
-                    "Prices aren't loaded for this match yet. Loading uses about ${OneXBetRepository.CREDIT_ESTIMATE} credits of your free plan" +
-                        (if (state.creditsLeft >= 0) " (${state.creditsLeft} left)." else "."),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                if (item.status == MatchStatus.UPCOMING) {
-                    Button(onClick = onLoad, enabled = !state.oneXBetLoading, colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Load 1xBet odds") }
+        Text(
+            "No API: 1xBet has no free public odds feed, and Matchday doesn't scrape its site. Copy the prices from your 1xBet app and the analysis is done here, on your phone.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (editing) {
+            OneXBetForm(item, (st as? OneXBetState.Ok)?.current, onCancel = { editing = false }) { prices -> onSave(prices); editing = false }
+        } else {
+            when (st) {
+                is OneXBetState.NotLoaded -> {
+                    Text("No 1xBet prices entered for this match.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Enter 1xBet odds") }
+                }
+                is OneXBetState.Ok -> {
+                    OneXBetTable(item, state, st.current, st.history, zone)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Blue)) { Text("Update odds") }
+                        OutlinedButton(onClick = onClear) { Text("Delete") }
+                    }
                 }
             }
-            is OneXBetState.Unsupported -> Text(st.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            is OneXBetState.Unavailable -> {
-                Text("Data unavailable: ${st.reason}", style = MaterialTheme.typography.bodySmall, color = Accent.Orange)
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onLoad, enabled = !state.oneXBetLoading) { Text("Try again") }
-            }
-            is OneXBetState.Ok -> OneXBetTable(item, state, st.current, st.history, onLoad, zone)
         }
     }
 }
 
 @Composable
-private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapshot, history: List<BookSnapshot>, onLoad: () -> Unit, zone: java.time.ZoneId) {
+private fun OneXBetForm(item: MatchItem, current: BookSnapshot?, onCancel: () -> Unit, onSave: (List<BookPrice>) -> Unit) {
+    val slots = OneXBetRepository.slots(item.homeTeam, item.awayTeam)
+    val values = remember(item.id) {
+        mutableStateMapOf<Int, String>().apply {
+            slots.forEachIndexed { i, sl -> current?.find(sl.market, sl.sel, sl.point)?.let { put(i, Formats.odds(it.price)) } }
+        }
+    }
+    val titles = mapOf("1X2" to "Match result (1X2)", "OU" to "Total goals", "BTTS" to "Both teams to score",
+        "DC" to "Double chance", "DNB" to "Draw no bet", "1H" to "First-half result")
+    Text("Fill in only the markets you want analysed (decimal odds, e.g. 1.85).", style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+    slots.withIndex().groupBy { it.value.market }.forEach { (market, group) ->
+        Spacer(Modifier.height(8.dp))
+        Text(titles[market] ?: market, style = MaterialTheme.typography.titleSmall, color = Accent.Purple)
+        group.chunked(if (market == "OU") 2 else 3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                row.forEach { (i, sl) ->
+                    val txt = values[i] ?: ""
+                    val bad = txt.isNotBlank() && OneXBetRepository.parse(txt) == null
+                    OutlinedTextField(
+                        value = txt, onValueChange = { v -> values[i] = v.filter { it.isDigit() || it == '.' || it == ',' }.take(7) },
+                        label = { Text(sl.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        singleLine = true, isError = bad,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+    val parsed = slots.mapIndexedNotNull { i, sl -> OneXBetRepository.parse(values[i] ?: "")?.let { BookPrice(sl.market, sl.sel, sl.label, sl.point, it) } }
+    val invalid = slots.indices.any { i -> (values[i] ?: "").isNotBlank() && OneXBetRepository.parse(values[i] ?: "") == null }
+    if (invalid) Text("Some values aren't valid decimal odds (must be above 1.01).", style = MaterialTheme.typography.labelSmall, color = Accent.Red)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+        Button(onClick = { onSave(parsed) }, enabled = parsed.isNotEmpty() && !invalid,
+            colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Save & analyse") }
+        OutlinedButton(onClick = onCancel) { Text("Cancel") }
+    }
+}
+
+@Composable
+private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapshot, history: List<BookSnapshot>, zone: java.time.ZoneId) {
     val p = state.extras.prediction ?: item.prediction
     val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", p, state.extras.btts)
     val previous = history.dropLast(1).lastOrNull()
     val first = history.firstOrNull()?.takeIf { history.size > 1 }
     Text(
-        "Genuine 1xBet prices via The Odds API. 1xBet last updated ${Formats.dayTime(snap.bookUpdatedAt, zone)}; downloaded ${Formats.ago(snap.fetchedAt)}.",
+        "1xBet prices entered by you on ${Formats.dayTime(snap.fetchedAt, zone)} (${Formats.ago(snap.fetchedAt)}). Prices change: update them before deciding.",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(8.dp))
@@ -295,14 +339,14 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     val missing = groups.filter { (g, _) -> lines.none { it.group == g } }.map { it.second }
     if (missing.isNotEmpty()) {
         Spacer(Modifier.height(6.dp))
-        Text("Not offered by 1xBet for this match (or not in the source): ${missing.joinToString(", ")}.",
+        Text("Not entered: ${missing.joinToString(", ")}.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (first != null) {
         Spacer(Modifier.height(10.dp))
         Text("Odds movement", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Since ${Formats.dayTime(first.fetchedAt, zone)} (${history.size} snapshots saved on this phone):",
+            "Since your first entry on ${Formats.dayTime(first.fetchedAt, zone)} (${history.size} saves on this phone):",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         lines.filter { it.group == "1X2" || (it.group == "OU" && it.point == 2.5) || it.group == "BTTS" }.forEach { l ->
@@ -318,14 +362,9 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     }
     Spacer(Modifier.height(8.dp))
     Text(
-        "Value = AI probability × 1xBet odds − 1 (green at +3% or more). First-half prices have no AI model, so value isn't shown for them." +
-            if (state.creditsLeft >= 0) " Credits left this month: ${state.creditsLeft}." else "",
+        "Value = AI probability × 1xBet odds − 1 (green at +3% or more). First-half prices have no AI model, so value isn't shown for them.",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    if (item.status == MatchStatus.UPCOMING) {
-        Spacer(Modifier.height(6.dp))
-        OutlinedButton(onClick = onLoad, enabled = !state.oneXBetLoading) { Text("Refresh 1xBet odds (~${OneXBetRepository.CREDIT_ESTIMATE} credits)") }
-    }
 }
 
 @Composable

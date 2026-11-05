@@ -75,9 +75,16 @@ run_pass() {
   sleep 8; check "$label open match"; screen_texts
   tap_text "Insights"; sleep 20; check "$label match tab Insights"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
-  for t in Teams Table Form H2H BTTS Squad Venue Odds Overview; do
+  for t in Teams Table Form H2H BTTS Squad Venue Odds; do
     tap_text "$t"; sleep 6; check "$label match tab $t"; screen_texts
   done
+  # Enter two 1xBet prices by hand and save (no API involved).
+  tap_text "Delete"; sleep 2
+  tap_text "Enter 1xBet odds"; sleep 3; check "$label 1xBet form"
+  tap_text "Draw"; sleep 1; adb shell input text "3.40"; sleep 1
+  adb shell input keyevent 111; sleep 1
+  tap_text "Save & analyse"; sleep 4; check "$label 1xBet saved"; screen_texts
+  tap_text "Overview"; sleep 4; check "$label match tab Overview"; screen_texts
   adb shell input swipe 500 1500 500 700 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4; check "$label back to list"
   search_flow "$label"

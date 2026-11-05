@@ -66,8 +66,6 @@ class SettingsViewModel(private val c: AppContainer, private val appContext: Con
     fun setDark(v: Boolean) = viewModelScope.launch { c.settings.setDark(v) }
     fun setNotify(kind: String, v: Boolean) = viewModelScope.launch { c.settings.setNotify(kind, v) }
     fun setThreshold(v: Int) = viewModelScope.launch { c.settings.setOddsThreshold(v) }
-    fun setOneXKey(v: String) = viewModelScope.launch { c.settings.setOneXBetKey(v) }
-    fun setOneXAuto(v: Boolean) = viewModelScope.launch { c.settings.setAutoLoadOneXBet(v) }
     fun refreshNow() = viewModelScope.launch { c.matches.refresh(force = true) }
     fun runChecksNow() = RefreshScheduler.runNow(appContext)
     fun testNotification() = Notifications.show(appContext, "test", "Matchday notifications work", "You'll get alerts like this for odds moves, line-ups and predictions.")
@@ -93,7 +91,7 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
         item { SectionHeader("Data", Accent.Green) }
         item {
             InfoCard {
-                Text("No account or API key needed (1xBet odds optional, below).", style = MaterialTheme.typography.titleSmall)
+                Text("No account or API key needed.", style = MaterialTheme.typography.titleSmall)
                 Text(
                     "Fixtures, scores, tables, line-ups and odds come from ESPN's free public feed; weather from Open-Meteo.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -205,39 +203,14 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
 }
 
 @Composable
-private fun OneXBetSettings(settings: AppSettings, vm: SettingsViewModel) {
-    var key by rememberSaveable { mutableStateOf(settings.oneXBetKey) }
-    var show by remember { mutableStateOf(false) }
+private fun OneXBetSettings(@Suppress("UNUSED_PARAMETER") settings: AppSettings, @Suppress("UNUSED_PARAMETER") vm: SettingsViewModel) {
     InfoCard {
-        Text(if (settings.oneXBetKey.isBlank()) "Not connected" else "Connected", style = MaterialTheme.typography.titleSmall,
-            color = if (settings.oneXBetKey.isBlank()) Accent.Orange else Accent.Green)
+        Text("No API or key needed", style = MaterialTheme.typography.titleSmall, color = Accent.Green)
         Text(
-            "1xBet doesn't offer a public odds API, and reading its website would mean getting around its protections, which Matchday doesn't do. " +
-                "Genuine 1xBet prices come instead from The Odds API (the-odds-api.com), a licensed aggregator that lists 1xBet as bookmaker \"onexbet\". " +
-                "Its free plan gives 500 credits a month, no card needed; loading one match uses about 7. Other bookmakers' prices are never shown as 1xBet.",
+            "1xBet has no free public odds feed, and Matchday doesn't scrape its website. To analyse 1xBet prices, open a football match, " +
+                "go to the Odds tab and tap \"Enter 1xBet odds\". Copy the prices from your 1xBet app: the app shows implied and AI probabilities, " +
+                "value and the betting verdict from them. Prices are stored only on this phone.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = key, onValueChange = { key = it }, singleLine = true,
-            label = { Text("The Odds API key") },
-            visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-            Button(onClick = { vm.setOneXKey(key) }) { Text("Save key") }
-            OutlinedButton(onClick = { show = !show }) { Text(if (show) "Hide" else "Show") }
-            if (settings.oneXBetKey.isNotBlank()) OutlinedButton(onClick = { key = ""; vm.setOneXKey("") }) { Text("Remove") }
-        }
-        Spacer(Modifier.height(6.dp))
-        ToggleRow(
-            "Load 1xBet odds automatically",
-            "When you open a football match and saved prices are older than 3 hours (uses credits).",
-            settings.autoLoadOneXBet,
-        ) { vm.setOneXAuto(it) }
-        Text(
-            "Credits left this month: ${if (settings.oddsApiRemaining >= 0) settings.oddsApiRemaining else "N/A (updates after the first load)"}",
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

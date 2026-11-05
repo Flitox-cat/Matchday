@@ -151,7 +151,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
                 8 -> item { ConditionsTab(item, state) }
                 else -> item {
                     Column {
-                        if (isFootball(item)) OneXBetSection(item, state, onLoad = { vm.loadOneXBet() }, onSettings = onSettings)
+                        if (isFootball(item)) OneXBetSection(item, state, onSave = { vm.saveOneXBet(it) }, onClear = { vm.clearOneXBet() })
                         OddsTab(item, odds, prediction)
                     }
                 }

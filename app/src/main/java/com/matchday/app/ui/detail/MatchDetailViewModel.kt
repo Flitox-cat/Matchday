@@ -42,8 +42,6 @@ data class DetailUiState(
     val history: HistoryState = HistoryState(),
     val insights: List<Insight> = emptyList(),
     val oneXBet: OneXBetState = OneXBetState.NotLoaded,
-    val oneXBetLoading: Boolean = false,
-    val creditsLeft: Int = -1,
     val verdict: Verdict? = null,
     val homeId: String? = null,
     val awayId: String? = null,
@@ -55,8 +53,6 @@ data class DetailUiState(
 private data class Research(
     val history: HistoryState,
     val oneX: OneXBetState,
-    val oneXLoading: Boolean,
-    val credits: Int,
     val ids: Pair<String?, String?>,
 )
 
@@ -64,15 +60,12 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
     private val extras = MutableStateFlow(DetailExtras())
     private val history = MutableStateFlow(HistoryState())
     private val oneX = MutableStateFlow<OneXBetState>(OneXBetState.NotLoaded)
-    private val oneXLoading = MutableStateFlow(false)
     private val ids = MutableStateFlow<Pair<String?, String?>>(null to null)
     private var loadJob: Job? = null
     private var histJob: Job? = null
     private val item = c.matches.observeMatch(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val research = combine(history, oneX, oneXLoading, c.settings.flow, ids) { h, o, l, s, i ->
-        Research(h, o, l, s.oddsApiRemaining, i)
-    }
+    private val research = combine(history, oneX, ids) { h, o, i -> Research(h, o, i) }
 
     val state: StateFlow<DetailUiState> = combine(item, extras, c.matches.observeFavourites(), research) { i, x, f, r ->
         val insights = if (i != null && i.competition.sport == SportType.FOOTBALL && (r.history.home != null || r.history.away != null || x.headToHead.isNotEmpty())) {
@@ -91,7 +84,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         } else null
         DetailUiState(
             item = i, extras = x, favourites = f, history = r.history, insights = insights,
-            oneXBet = r.oneX, oneXBetLoading = r.oneXLoading, creditsLeft = r.credits, verdict = verdict,
+            oneXBet = r.oneX, verdict = verdict,
             homeId = r.ids.first, awayId = r.ids.second,
         )
     }.flowOn(Dispatchers.Default)
@@ -107,7 +100,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         val p = x.prediction ?: i.prediction
         val btts = x.btts
         return if (o is OneXBetState.Ok) {
-            VerdictEngine.build(i, p, btts, VerdictEngine.linesFrom1xBet(o.current.prices, "1xBet", p, btts), "1xBet", insights)
+            VerdictEngine.build(i, p, btts, VerdictEngine.linesFrom1xBet(o.current.prices, "1xBet", p, btts), com.matchday.app.data.repo.OneXBetRepository.SOURCE, insights)
         } else {
             val lines = VerdictEngine.linesFromFeed(i.odds, p, btts)
             VerdictEngine.build(i, p, btts, lines, lines.firstOrNull()?.bookmaker, insights)
@@ -129,7 +122,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         }
         if (i.competition.sport == SportType.FOOTBALL) {
             loadHistory(i)
-            loadOneXBet(i, auto = true)
+            viewModelScope.launch { oneX.value = runCatching { c.oneXBet.state(i) }.getOrDefault(OneXBetState.NotLoaded) }
         }
     }
 
@@ -155,28 +148,15 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         }
     }
 
-    /** [auto]: only uses credits when the user enabled auto-load and the saved prices are stale. */
-    fun loadOneXBet(i: MatchItem? = item.value, auto: Boolean = false) {
-        val m = i ?: return
-        viewModelScope.launch {
-            try {
-                val cached = c.oneXBet.cachedState(m)
-                oneX.value = cached
-                if (cached is OneXBetState.NotConfigured) return@launch
-                if (m.status != MatchStatus.UPCOMING && cached is OneXBetState.Ok) return@launch
-                val s = c.settings.current()
-                val shouldFetch = !auto || (s.autoLoadOneXBet && m.status == MatchStatus.UPCOMING && c.oneXBet.isStale(m))
-                if (!shouldFetch) return@launch
-                oneXLoading.value = true
-                oneX.value = withContext(Dispatchers.IO) { c.oneXBet.load(m) }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                oneX.value = OneXBetState.Unavailable("1xBet odds couldn't be loaded (${e.javaClass.simpleName}).")
-            } finally {
-                oneXLoading.value = false
-            }
-        }
+    /** Saves 1xBet prices typed in by the user (no API). */
+    fun saveOneXBet(prices: List<com.matchday.app.data.repo.BookPrice>) {
+        val m = item.value ?: return
+        viewModelScope.launch { oneX.value = runCatching { c.oneXBet.save(m, prices) }.getOrDefault(oneX.value) }
+    }
+
+    fun clearOneXBet() {
+        val m = item.value ?: return
+        viewModelScope.launch { oneX.value = runCatching { c.oneXBet.clear(m) }.getOrDefault(oneX.value) }
     }
 
     fun reload() { item.value?.let { load(it) } }

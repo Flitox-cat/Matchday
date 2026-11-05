@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.matchday.app.domain.Catalog
@@ -28,9 +27,6 @@ data class AppSettings(
     val notifyInjuries: Boolean = true,
     val notifyPredictions: Boolean = true,
     val lastRefresh: Long = 0,
-    val oneXBetKey: String = "",          // user's own free The Odds API key (for genuine 1xBet prices)
-    val autoLoadOneXBet: Boolean = true,  // load 1xBet odds automatically when a football match opens
-    val oddsApiRemaining: Int = -1,       // credits left this month, from the API's response headers
 )
 
 class SettingsStore(private val context: Context) {
@@ -46,9 +42,6 @@ class SettingsStore(private val context: Context) {
         val nInjuries = booleanPreferencesKey("n_injuries")
         val nPredictions = booleanPreferencesKey("n_predictions")
         val lastRefresh = longPreferencesKey("last_refresh")
-        val oneXKey = stringPreferencesKey("onexbet_key")
-        val oneXAuto = booleanPreferencesKey("onexbet_auto")
-        val oddsRemaining = intPreferencesKey("odds_api_remaining")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p -> p.toSettings() }
@@ -67,9 +60,6 @@ class SettingsStore(private val context: Context) {
         notifyInjuries = this[K.nInjuries] ?: true,
         notifyPredictions = this[K.nPredictions] ?: true,
         lastRefresh = this[K.lastRefresh] ?: 0L,
-        oneXBetKey = this[K.oneXKey] ?: "",
-        autoLoadOneXBet = this[K.oneXAuto] ?: true,
-        oddsApiRemaining = this[K.oddsRemaining] ?: -1,
     )
 
     suspend fun toggleLeague(key: String, enabled: Boolean) {
@@ -96,9 +86,6 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[key] = v }
     }
 
-    suspend fun setOneXBetKey(v: String) { context.dataStore.edit { it[K.oneXKey] = v.trim() } }
-    suspend fun setAutoLoadOneXBet(v: Boolean) { context.dataStore.edit { it[K.oneXAuto] = v } }
-    suspend fun setOddsApiRemaining(v: Int) { context.dataStore.edit { it[K.oddsRemaining] = v } }
 
     suspend fun markRefreshed(at: Long) { context.dataStore.edit { it[K.lastRefresh] = at } }
 }
