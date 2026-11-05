@@ -63,6 +63,29 @@ interface EspnSearchService {
     ): ESearchResponse
 }
 
+/** The Odds API v4 - only used for 1xBet ("onexbet") prices with the user's own free key. */
+interface OddsApiService {
+    /** Free: listing events does not use quota. */
+    @GET("v4/sports/{sport}/events")
+    suspend fun events(
+        @Path("sport") sport: String,
+        @Query("apiKey") apiKey: String,
+        @Query("dateFormat") dateFormat: String = "iso",
+    ): retrofit2.Response<List<OEvent>>
+
+    /** Cost = number of markets returned x regions (one region here). */
+    @GET("v4/sports/{sport}/events/{eventId}/odds")
+    suspend fun eventOdds(
+        @Path("sport") sport: String,
+        @Path("eventId") eventId: String,
+        @Query("apiKey") apiKey: String,
+        @Query("markets") markets: String,
+        @Query("bookmakers") bookmakers: String = "onexbet",
+        @Query("oddsFormat") oddsFormat: String = "decimal",
+        @Query("dateFormat") dateFormat: String = "iso",
+    ): retrofit2.Response<OEvent>
+}
+
 interface GeocodingService {
     @GET("v1/search")
     suspend fun search(

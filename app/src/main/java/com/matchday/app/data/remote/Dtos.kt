@@ -330,3 +330,41 @@ data class ESearchItem(
 
 @Serializable
 data class ESearchResponse(val items: List<ESearchItem> = emptyList())
+
+// ---------------------------------------------------------------------------
+// The Odds API (the-odds-api.com) - used ONLY for genuine 1xBet prices (bookmaker key "onexbet").
+// Optional: needs the user's own free key.
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class OEvent(
+    val id: String = "",
+    @kotlinx.serialization.SerialName("sport_key") val sportKey: String? = null,
+    @kotlinx.serialization.SerialName("commence_time") val commenceTime: String? = null,
+    @kotlinx.serialization.SerialName("home_team") val homeTeam: String? = null,
+    @kotlinx.serialization.SerialName("away_team") val awayTeam: String? = null,
+    val bookmakers: List<OBookmaker> = emptyList(),
+)
+
+@Serializable
+data class OBookmaker(
+    val key: String = "",
+    val title: String = "",
+    @kotlinx.serialization.SerialName("last_update") val lastUpdate: String? = null,
+    val markets: List<OMarket> = emptyList(),
+)
+
+@Serializable
+data class OMarket(
+    val key: String = "",
+    @kotlinx.serialization.SerialName("last_update") val lastUpdate: String? = null,
+    val outcomes: List<OOutcome> = emptyList(),
+)
+
+@Serializable
+data class OOutcome(
+    val name: String = "",
+    val price: Double = 0.0,
+    val point: Double? = null,
+    val description: String? = null,
+)

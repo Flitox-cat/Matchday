@@ -24,7 +24,7 @@ class AppContainer(context: Context) {
     val weather = WeatherRepository(cache)
     val matches = MatchRepository(db, settings, weather, cache)
     val teams = TeamRepository(db, cache)
-    val oneXBet = OneXBetRepository(cache)
+    val oneXBet = OneXBetRepository(cache, settings)
 }
 
 class MatchdayApp : Application() {

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.matchday.app.data.repo.ApiStatus
 import com.matchday.app.data.repo.BookPrice
 import com.matchday.app.data.repo.BookSnapshot
 import com.matchday.app.data.repo.OneXBetRepository
@@ -221,7 +222,7 @@ fun VerdictCard(item: MatchItem, state: DetailUiState) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "Odds source: ${v.oddsSource ?: "none"}" + if (v.oddsSource != null && v.oddsSource != OneXBetRepository.SOURCE) " (enter 1xBet prices on the Odds tab to use them)." else ".",
+            "Odds source: ${v.oddsSource ?: "none"}" + if (v.oddsSource != null && v.oddsSource?.startsWith("1xBet") != true) " (load or enter 1xBet prices on the Odds tab to use them)." else ".",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -232,17 +233,17 @@ fun VerdictCard(item: MatchItem, state: DetailUiState) {
 // ---------------------------------------------------------------------------
 
 @Composable
-fun OneXBetSection(item: MatchItem, state: DetailUiState, onSave: (List<BookPrice>) -> Unit, onClear: () -> Unit) {
+fun OneXBetSection(item: MatchItem, state: DetailUiState, onSave: (List<BookPrice>) -> Unit, onClear: () -> Unit, onLoadApi: () -> Unit, onSettings: () -> Unit) {
     val zone = LocalZone.current
     val st = state.oneXBet
     var editing by rememberSaveable(item.id) { mutableStateOf(false) }
     InfoCard {
-        Text("1xBet odds", style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("1xBet odds", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (state.api.loading) CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = Accent.Purple)
+        }
         Spacer(Modifier.height(4.dp))
-        Text(
-            "No API: 1xBet has no free public odds feed, and Matchday doesn't scrape its site. Copy the prices from your 1xBet app and the analysis is done here, on your phone.",
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ApiStatusBlock(item, state, onLoadApi, onSettings)
         Spacer(Modifier.height(8.dp))
         if (editing) {
             OneXBetForm(item, (st as? OneXBetState.Ok)?.current, onCancel = { editing = false }) { prices -> onSave(prices); editing = false }
@@ -313,7 +314,9 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     val previous = history.dropLast(1).lastOrNull()
     val first = history.firstOrNull()?.takeIf { history.size > 1 }
     Text(
-        "1xBet prices entered by you on ${Formats.dayTime(snap.fetchedAt, zone)} (${Formats.ago(snap.fetchedAt)}). Prices change: update them before deciding.",
+        if (snap.bookmaker == OneXBetRepository.SOURCE_API)
+            "Genuine 1xBet prices via The Odds API. 1xBet last updated ${Formats.dayTime(snap.bookUpdatedAt, zone)}; downloaded ${Formats.ago(snap.fetchedAt)}."
+        else "1xBet prices entered by you on ${Formats.dayTime(snap.fetchedAt, zone)} (${Formats.ago(snap.fetchedAt)}). Prices change: update them before deciding.",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(8.dp))
@@ -385,4 +388,37 @@ private fun LineRow(l: MarketLine, previous: Double?) {
             color = when { edge == null -> MaterialTheme.colorScheme.onSurfaceVariant; edge >= 0.03 -> Accent.Green; edge < 0 -> Accent.Red; else -> Accent.Orange },
         )
     }
+}
+
+@Composable
+private fun ApiStatusBlock(item: MatchItem, state: DetailUiState, onLoadApi: () -> Unit, onSettings: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    when (val a = state.api.status) {
+        is ApiStatus.NoKey -> {
+            Text(
+                "Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.",
+                style = MaterialTheme.typography.labelSmall, color = muted,
+            )
+            OutlinedButton(onClick = onSettings, modifier = Modifier.padding(top = 4.dp)) { Text("Add key") }
+        }
+        is ApiStatus.Paused -> Text(
+            "Free Odds API credits are used up. Automatic loading restarts on ${Formats.day(a.until, LocalZone.current)}; until then enter 1xBet prices by hand - everything else works as normal.",
+            style = MaterialTheme.typography.labelSmall, color = Accent.Orange,
+        )
+        is ApiStatus.Unsupported -> Text(a.reason, style = MaterialTheme.typography.labelSmall, color = muted)
+        is ApiStatus.Ready -> {
+            Text(
+                "Automatic via The Odds API: about ${OneXBetRepository.CREDIT_ESTIMATE} credits per load" +
+                    (if (a.creditsLeft >= 0) ", ${a.creditsLeft} left this month." else "."),
+                style = MaterialTheme.typography.labelSmall, color = muted,
+            )
+            if (item.status == MatchStatus.UPCOMING) {
+                Button(
+                    onClick = onLoadApi, enabled = !state.api.loading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent.Green), modifier = Modifier.padding(top = 4.dp),
+                ) { Text(if (state.oneXBet is OneXBetState.Ok) "Refresh from 1xBet" else "Load 1xBet odds") }
+            }
+        }
+    }
+    state.api.message?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Accent.Orange, modifier = Modifier.padding(top = 4.dp)) }
 }
