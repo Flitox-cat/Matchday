@@ -51,35 +51,40 @@ private fun ProbBar(p: Double, color: Color) {
     }
 }
 
-/** Best, second and third selections (only as many as the evidence supports). */
+/** Every market ranked from highest to lowest probability (10+ rows), with the top recommendations marked. */
 @Composable
 fun TopSelectionsCard(item: MatchItem, a: MarketAnalysis, insights: List<Insight>, compact: Boolean) {
+    var showAll by rememberSaveable(item.id, compact) { mutableStateOf(false) }
+    val ranked = a.markets.filter { it.probability < com.matchday.app.domain.MarketEngine.MAX_PROB && it.market != "AH" }
+    val limit = if (showAll) ranked.size else if (compact) 10 else 15
+    val recommended = a.top.map { it.key }.toSet()
     InfoCard {
         Text("Best selections (all markets)", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Ranked by estimated probability of success across every market, three different kinds of bet at most. Near-certainties (95%+) are skipped.",
+            "Every market ranked from the highest to the lowest estimated probability. Near-certainties (95%+) are left out because they can't be bet at a useful price. " +
+                "★ = recommended (different kinds of bet, 60%+ and a fair price). Tap a row for evidence and risks.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         if (a.top.isEmpty()) {
-            Text("NO RECOMMENDATION: ${a.noPickReason ?: "no market is strong enough."}", style = MaterialTheme.typography.bodyMedium, color = Accent.Red)
-            return@InfoCard
+            Text("NO RECOMMENDATION: ${a.noPickReason ?: "no market is strong enough."} The ranking below is for information only.",
+                style = MaterialTheme.typography.bodySmall, color = Accent.Red, modifier = Modifier.padding(bottom = 6.dp))
         }
-        val names = listOf("Best selection", "Second-best", "Third-best")
-        a.top.forEachIndexed { i, m ->
-            SelectionBlock(names[i], m, insights, expandedDefault = !compact && i == 0, highlight = i == 0)
-            if (i < a.top.lastIndex) Spacer(Modifier.height(8.dp))
+        ranked.take(limit).forEachIndexed { i, m ->
+            RankRow(i + 1, m, recommended.contains(m.key), insights, expandedDefault = !compact && i == 0)
         }
-        if (a.top.size < 3) {
+        if (ranked.size > 10) {
             Text(
-                "Only ${a.top.size} selection${if (a.top.size == 1) "" else "s"} reach ${pct(com.matchday.app.domain.MarketEngine.MIN_TOP_PROB)} at a fair price, so no more are suggested.",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
+                if (showAll) "Show less" else "Show all ${ranked.size} markets",
+                style = MaterialTheme.typography.labelMedium, color = Accent.Blue,
+                modifier = Modifier.padding(top = 8.dp).clickable { showAll = !showAll },
             )
         }
-        val second = a.markets.filter { it.probability < com.matchday.app.domain.MarketEngine.MAX_PROB }.firstOrNull { it.key != a.top.first().key }
-        if (second != null) {
+        val best = a.top.firstOrNull()
+        val next = ranked.firstOrNull { best != null && it.key != best.key }
+        if (best != null && next != null) {
             Text(
-                "Why \"${a.top.first().label}\": it's estimated at ${pct(a.top.first().probability)}, ahead of ${second.label} (${pct(second.probability)}) and every result market " +
+                "Why \"${best.label}\" is the main pick: ${pct(best.probability)}, ahead of ${next.label} (${pct(next.probability)}) and the result markets " +
                     "(${item.homeTeam} ${pct(a.markets.firstOrNull { it.market == "1X2" && it.sel == "HOME" }?.probability)}, " +
                     "${item.awayTeam} ${pct(a.markets.firstOrNull { it.market == "1X2" && it.sel == "AWAY" }?.probability)}).",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
@@ -89,35 +94,29 @@ fun TopSelectionsCard(item: MatchItem, a: MarketAnalysis, insights: List<Insight
 }
 
 @Composable
-private fun SelectionBlock(title: String, m: MarketPick, insights: List<Insight>, expandedDefault: Boolean, highlight: Boolean) {
+private fun RankRow(rank: Int, m: MarketPick, recommended: Boolean, insights: List<Insight>, expandedDefault: Boolean) {
     var open by rememberSaveable(m.key) { mutableStateOf(expandedDefault) }
     val c = probColor(m.probability)
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(if (highlight) c.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .border(1.dp, c.copy(alpha = if (highlight) 0.5f else 0.2f), RoundedCornerShape(14.dp))
-            .clickable { open = !open }.padding(12.dp),
+        Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(10.dp))
+            .background(if (recommended) c.copy(alpha = 0.10f) else Color.Transparent)
+            .clickable { open = !open }.padding(horizontal = 6.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$rank", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.labelSmall, color = c)
-                Text(m.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2)
-                Text(m.family.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(pct(m.probability), style = MaterialTheme.typography.titleLarge, color = c, fontWeight = FontWeight.Bold)
+                Text((if (recommended) "★ " else "") + m.label, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (recommended) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    m.odds?.let { "${Formats.odds(it)} · ${m.bookmaker ?: ""}" } ?: "1xBet odds: not loaded",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End,
+                    m.family.label + " · " + (m.odds?.let { "${Formats.odds(it)} ${m.bookmaker ?: ""}" + (m.edge?.let { e -> " (value ${if (e >= 0) "+" else ""}${Math.round(e * 100)}%)" } ?: "") } ?: "1xBet odds: not loaded"),
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                m.edge?.let { e ->
-                    Text("value ${if (e >= 0) "+" else ""}${Math.round(e * 100)}%", style = MaterialTheme.typography.labelSmall,
-                        color = if (e >= 0.03) Accent.Green else if (e < 0) Accent.Red else Accent.Orange)
-                }
             }
+            ProbBar(m.probability, c)
+            Text(pct(m.probability), style = MaterialTheme.typography.titleSmall, color = c, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         }
         if (open) {
-            Spacer(Modifier.height(6.dp))
             Label("Statistical evidence", Accent.Blue)
             m.evidence.forEach { Bullet(it) }
             m.injuryShift?.takeIf { kotlin.math.abs(it) >= 0.005 }?.let {
@@ -133,8 +132,6 @@ private fun SelectionBlock(title: String, m: MarketPick, insights: List<Insight>
                 Label("Risks", Accent.Red)
                 m.risks.forEach { Bullet(it) }
             }
-        } else {
-            Text("Tap for evidence, injuries, history and risks", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -212,7 +209,7 @@ private fun ProfilesCard(a: MarketAnalysis) {
 @Composable
 private fun AllMarketsCard(a: MarketAnalysis) {
     InfoCard {
-        Text("Every market, ranked by probability", style = MaterialTheme.typography.titleMedium)
+        Text("Every market by type", style = MaterialTheme.typography.titleMedium)
         Text(
             "Probability = goals model blended with the teams' real records (up to 30%). Odds: ${a.priceSource ?: "none loaded"}; markets without a price show N/A.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,

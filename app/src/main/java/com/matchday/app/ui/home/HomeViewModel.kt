@@ -142,6 +142,21 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
                 android.util.Log.e("HomeViewModel", "Startup refresh failed", e)
             }
         }
+        // Keep live scores current on Home: re-check leagues with games in play every minute,
+        // so a match that ends drops out of "Live" without opening the Live tab.
+        viewModelScope.launch {
+            runCatching { c.matches.refreshLive() }
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                try {
+                    c.matches.refreshLive()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.w("HomeViewModel", "Live update failed", e)
+                }
+            }
+        }
     }
 
     fun refresh() = viewModelScope.launch {

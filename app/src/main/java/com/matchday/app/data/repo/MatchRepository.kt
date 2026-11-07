@@ -152,12 +152,16 @@ class MatchRepository(
         val today = LocalDate.now(ZoneOffset.UTC)
         val days = (-1..6).map { today.plusDays(it.toLong()) }
 
+        val inPlay = db.matches().since(now - 8 * HOUR)
+            .filter { it.state == "in" || (it.state == "pre" && it.kickoff <= now) }
+            .map { it.leagueKey }.toSet()
+
         coroutineScope {
             comps.map { comp ->
                 async {
                     val stamp = "refresh:${comp.key}"
                     val age = cache.ageMs(stamp)
-                    if (!force && age != null && age < s.refreshMinutes * 60_000L) return@async true
+                    if (!force && comp.key !in inPlay && age != null && age < s.refreshMinutes * 60_000L) return@async true
                     val ok = refreshLeague(comp, days, now)
                     if (ok) cache.touch(stamp)
                     ok
@@ -350,7 +354,7 @@ class MatchRepository(
     /** Re-downloads today's scoreboard for leagues with games in play (free; called by the Live tab). */
     suspend fun refreshLive(): List<String> {
         val now = System.currentTimeMillis()
-        val inPlay = db.matches().since(now - 6 * HOUR)
+        val inPlay = db.matches().since(now - 8 * HOUR)
             .filter { it.state == "in" || (it.state == "pre" && it.kickoff <= now + 15 * 60_000L) }
             .map { it.leagueKey }.distinct()
         if (inPlay.isEmpty()) return emptyList()
@@ -414,12 +418,23 @@ class MatchRepository(
         }.sortedBy { it.kickoff }
     }
 
+    /** Longest realistic duration from kick-off, per sport (incl. extra time / penalties / delays). */
+    private fun maxDurationMs(sport: SportType): Long = when (sport) {
+        SportType.FOOTBALL -> 3 * HOUR
+        SportType.BASKETBALL, SportType.HOCKEY -> 4 * HOUR
+        else -> 8 * HOUR
+    }
+
     private fun toItem(e: MatchEntity, table: LeagueTable?, favTeams: List<String>, favComps: Set<String>): MatchItem {
         val base = Catalog.find(e.leagueKey)
         val comp = if (e.leagueLogo != null) base.copy(emblem = e.leagueLogo) else base
-        val status = when (e.state) {
-            "in" -> MatchStatus.LIVE
-            "post" -> MatchStatus.FINISHED
+        // A game still marked "in play" long after it must have ended means the feed couldn't be
+        // re-read (e.g. offline): don't keep showing it as live.
+        val stale = e.state == "in" && System.currentTimeMillis() - e.kickoff > maxDurationMs(base.sport)
+        val status = when {
+            stale -> MatchStatus.FINISHED
+            e.state == "in" -> MatchStatus.LIVE
+            e.state == "post" -> MatchStatus.FINISHED
             else -> MatchStatus.UPCOMING
         }
         val odds = EspnMapper.summary(oddsOf(e), e.homeTeam, e.awayTeam, comp.sport, comp.hasDraw)
@@ -437,7 +452,8 @@ class MatchRepository(
         val favourite = favTeams.any { TeamMatcher.same(it, e.homeTeam) || TeamMatcher.same(it, e.awayTeam) } || comp.key in favComps
         return MatchItem(
             id = e.id, competition = comp, homeTeam = e.homeTeam, awayTeam = e.awayTeam, kickoff = e.kickoff,
-            status = status, homeScore = e.homeScore, awayScore = e.awayScore, statusDetail = e.statusDetail,
+            status = status, homeScore = e.homeScore, awayScore = e.awayScore,
+            statusDetail = if (stale) "Ended? Final score not confirmed yet" else e.statusDetail,
             odds = odds, prediction = prediction,
             homeCrest = e.homeLogo, awayCrest = e.awayLogo,
             venue = listOfNotNull(e.venue, e.city).joinToString(", ").ifBlank { null },
