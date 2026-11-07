@@ -1,0 +1,216 @@
+Performing Streamed Install
+Success
+########## PASS 1: ONLINE ##########
+=== OK: online launch
+   screen: ['Matchday', 'Updated just now · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '39', 'NBA', 'Tomorrow 01:00', 'Indiana Pacers', 'Denver Nuggets', 'Arena CDMX, Mexico City', '1']
+tapped Predictions
+=== OK: online tab Predictions
+tapped Live
+=== OK: online tab Live
+tapped Favourites
+=== OK: online tab Favourites
+tapped Settings
+=== OK: online tab Settings
+tapped Home
+=== OK: online tab Home
+tapped BTTS Yes
+=== OK: online filter BTTS Yes
+   screen: ['Matchday', 'Updated 1 min ago · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '23', 'Serie A', 'Tomorrow 14:30', 'Napoli', 'Lazio', 'Stadio Diego Armando Maradona, Napoli', '1']
+tapped BTTS Yes
+tapped Football
+   screen: ['Matchday', 'Updated 1 min ago · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '24', 'Serie A', 'Tomorrow 14:30', 'Napoli', 'Lazio', 'Stadio Diego Armando Maradona, Napoli', '1']
+tapped X
+=== OK: online open match
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Best selections (all markets)', "Every market ranked from the highest to the lowest estimated probability. Near-certainties (95%+) are left out because they can't be bet at a useful price. ★ = recommended (different kinds of bet, 60%+ and a fair price). Tap a row for evidence and risks.", '1', '★ Napoli Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '81%', '2', '★ Under 4.5 goals', 'Over/Under goals · 1xBet odds: not loaded', '81%', '3']
+tapped Markets
+=== OK: online match tab Markets
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Best selections (all markets)', "Every market ranked from the highest to the lowest estimated probability. Near-certainties (95%+) are left out because they can't be bet at a useful price. ★ = recommended (different kinds of bet, 60%+ and a fair price). Tap a row for evidence and risks.", '1', '★ Napoli Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '81%', 'Statistical evidence', '•  Goals model: Napoli 1.5 – 1.5 Lazio expected goals.', '•  Happened in 80% of the last 20 relevant games (Napoli at home, Lazio away).', '•  Napoli score 1.9 per home game (blank in 20%); Lazio concede 0.7 per away game (clean sheet in 50%).', 'Historical factors']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', '1', '★ Napoli Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '81%', 'Statistical evidence', '•  Goals model: Napoli 1.5 – 1.5 Lazio expected goals.', '•  Happened in 80% of the last 20 relevant games (Napoli at home, Lazio away).', '•  Napoli score 1.9 per home game (blank in 20%); Lazio concede 0.7 per away game (clean sheet in 50%).', 'Historical factors', '•  Napoli home record: Ordinary home record: no strong home-advantage signal.', '•  Lazio away record: Strong travellers: supports Lazio win / X2.', '•  Goal environment: Context for the goals and BTTS markets: neutral on totals, supports BTTS No.', 'Risks', "•  No 1xBet price loaded: value can't be checked.", '•  Injuries/suspensions unknown (add an API-Football key).', '•  Line-ups not confirmed yet.', '2', '★ Under 4.5 goals', 'Over/Under goals · 1xBet odds: not loaded']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', '4', 'Lazio Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '78%', '5', 'Lazio Over 0.5', 'Individual team goals · 1xBet odds: not loaded', '76%', '6', '★ 1st half BTTS No', 'First-half markets · 1xBet odds: not loaded', '76%', '7', 'Double chance 12', 'Double chance / Draw no bet · 1xBet odds: not loaded', '74%', '8', 'Napoli Over 0.5', 'Individual team goals · 1xBet odds: not loaded']
+tapped Insights
+=== OK: online match tab Insights
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Lazio have won 8 of their last 10 away matches (D0 L2), scoring 2.0 and conceding 0.7 per game.', 'Matches', '10', 'Wins', '8', 'Draws', '0', 'Losses', '2', 'Goals scored', '20', 'Goals conceded', '7', 'Betting impact: Strong travellers: supports Lazio win / X2.', '10 matches analysed · Sun 22 Mar – Tue 27 Oct · Italian Serie A · Source: ESPN · updated just now', '&#128293;', 'Goal environment', "3+ goals in 6 of Napoli's last 10 home games and 4 of Lazio's last 10 away games; both teams scored in 7 of those 20.", 'Over 2.5 rate']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', "3+ goals in 6 of Napoli's last 10 home games and 4 of Lazio's last 10 away games; both teams scored in 7 of those 20.", 'Over 2.5 rate', '50%', 'BTTS rate', '35%', 'Betting impact: Context for the goals and BTTS markets: neutral on totals, supports BTTS No.', '20 matches analysed · Sun 22 Mar – Tue 27 Oct · Italian Serie A, Champions League · Source: ESPN · updated just now', '&#128293;', 'Current form: Lazio have scored in 11 consecutive matches', 'Lazio have scored in 11 consecutive matches (all competitions, 2026-05-23 – 2026-11-01).', 'Matches', '11', 'Wins', '10', 'Draws', '1', 'Losses', '0', 'Goals scored']
+tapped Teams
+=== OK: online match tab Teams
+   screen: ['Serie A', 'Markets', 'Insights', 'Teams', 'Table', 'Form', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Napoli', 'Italy', 'Italian Serie A', 'vs', 'Lazio', 'Italy', 'Italian Serie A', '#10', 'League position', '#1', '14']
+tapped Table
+=== OK: online match tab Table
+   screen: ['Serie A', 'Insights', 'Teams', 'Table', 'Form', 'H2H', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Italian Serie A', '#', 'Team', 'P', 'W', 'D', 'L', 'GD', 'Pts', '1', 'LAZ']
+tapped Form
+=== OK: online match tab Form
+   screen: ['Serie A', 'Teams', 'Table', 'Form', 'H2H', 'BTTS', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Napoli', '40%', 'Win %', '1.9', 'Scored/gm', '1.8', 'Conceded/gm', '2', 'Clean sheets', 'Attack: average · Defence: weak · Record W4 D2 L4 (last 10)', 'L']
+tapped H2H
+=== OK: online match tab H2H
+   screen: ['Serie A', 'Table', 'Form', 'H2H', 'BTTS', 'Squad', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Head-to-Head (last 5)', '1', '  –  1  –  ', '3', 'Napoli wins', 'Draws', 'Lazio wins', 'Goals', 'Napoli 5 · 8 Lazio', 'Average goals per match', '2.6']
+tapped BTTS
+=== OK: online match tab BTTS
+   screen: ['Serie A', 'Form', 'H2H', 'BTTS', 'Squad', 'Venue', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Both Teams to Score', 'Low', 'YES', '56% probability', 'Odds: N/A', 'NO', '44% probability', 'Odds: N/A', 'Recommended: BTTS Yes', 'Odds: not available - the free data source publishes no BTTS prices, so this is a probability estimate, not a value bet.', 'Why']
+tapped Squad
+=== OK: online match tab Squad
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', "Football injury lists aren't in the free feed. Check the line-ups below once they're confirmed.", 'Line-ups: not confirmed yet. They usually appear 20-60 minutes before kick-off; reopen this match then.']
+tapped Venue
+=== OK: online match tab Venue
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Venue', 'Stadium', 'Stadio Diego Armando Maradona', 'City', 'Napoli', 'Home side', 'Napoli', 'Weather at kick-off', 'Conditions', 'Clear sky', 'Temperature']
+tapped Odds
+=== OK: online match tab Odds
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'No 1xBet prices entered for this match.', 'Enter 1xBet odds', 'Our fair odds (estimate, not a bookmaker price)', 'Napoli', 'fair 2.79', 'best 2.25', '-19.3%', 'Draw']
+NOT FOUND Delete
+tapped Enter 1xBet odds
+=== OK: online 1xBet form
+tapped Draw
+NOT FOUND Save & analyse
+=== OK: online 1xBet saved
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5']
+NOT FOUND Overview
+=== OK: online match tab Overview
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5']
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5']
+=== OK: online back to list
+NOT FOUND Home
+NOT FOUND Search teams or competitions
+=== OK: online search typed
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5']
+NOT FOUND Team
+=== OK: online team page
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5']
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5', 'Both teams to score', 'BTTS Yes', 'BTTS No', 'Double chance', 'Double chance 1X', 'Double chance X2', 'Double chance 12', 'Draw no bet', 'Napoli (DNB)', 'Lazio (DNB)', 'First-half result', '1st half: Napoli', '1st half: Draw', '1st half: Lazio', 'First-half goals']
+=== OK: online team page scrolled
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Napoli (DNB)', 'Lazio (DNB)', 'First-half result', '1st half: Napoli', '1st half: Draw', '1st half: Lazio', 'First-half goals', '1H Over 0.5', '1H Under 0.5', '1H Over 1.5', '1H Under 1.5', 'First-half BTTS', '1H BTTS Yes', '1H BTTS No', 'Team goals', 'Napoli O0.5', 'Napoli U0.5', 'Lazio O0.5', 'Lazio U0.5']
+=== OK: online back from team
+NOT FOUND Clear search
+=== OK: online search cleared
+=== OK: online landscape
+=== OK: online portrait
+########## PASS 2: OFFLINE (cached data) ##########
+=== OK: offline launch
+   screen: ['Matchday', 'Updated 6 min ago · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'NBA', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '39', 'NBA', 'Tomorrow 01:00', 'Indiana Pacers', 'Denver Nuggets', 'Arena CDMX, Mexico City']
+tapped Predictions
+=== OK: offline tab Predictions
+tapped Live
+=== OK: offline tab Live
+tapped Favourites
+=== OK: offline tab Favourites
+tapped Settings
+=== OK: offline tab Settings
+tapped Home
+=== OK: offline tab Home
+tapped BTTS Yes
+=== OK: offline filter BTTS Yes
+   screen: ['Matchday', 'Updated 7 min ago · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'NBA', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '23', 'Serie A', 'Tomorrow 14:30', 'Napoli', 'Lazio', 'Stadio Diego Armando Maradona, Napoli']
+tapped BTTS Yes
+tapped Football
+   screen: ['Matchday', 'Updated 7 min ago · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Tennis', 'Basketball', 'Football', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'La Liga', 'Premier League', 'Serie A', 'Bundesliga', 'Times shown in Qatar time (AST)', 'Tomorrow', '24', 'Serie A', 'Tomorrow 14:30', 'Napoli', 'Lazio', 'Stadio Diego Armando Maradona, Napoli', '1']
+tapped X
+=== OK: offline open match
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Best selections (all markets)', "Every market ranked from the highest to the lowest estimated probability. Near-certainties (95%+) are left out because they can't be bet at a useful price. ★ = recommended (different kinds of bet, 60%+ and a fair price). Tap a row for evidence and risks.", '1', '★ Napoli Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '81%', '2', '★ Under 4.5 goals', 'Over/Under goals · 1xBet odds: not loaded', '81%', '3']
+tapped Markets
+=== OK: offline match tab Markets
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Best selections (all markets)', "Every market ranked from the highest to the lowest estimated probability. Near-certainties (95%+) are left out because they can't be bet at a useful price. ★ = recommended (different kinds of bet, 60%+ and a fair price). Tap a row for evidence and risks.", '1', '★ Napoli Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '81%', 'Statistical evidence', '•  Goals model: Napoli 1.5 – 1.5 Lazio expected goals.', '•  Happened in 80% of the last 20 relevant games (Napoli at home, Lazio away).', '•  Napoli score 1.9 per home game (blank in 20%); Lazio concede 0.7 per away game (clean sheet in 50%).', 'Historical factors']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Statistical evidence', '•  Goals model: Napoli 1.5 – 1.5 Lazio expected goals.', '•  Happened in 80% of the last 20 relevant games (Napoli at home, Lazio away).', '•  Napoli score 1.9 per home game (blank in 20%); Lazio concede 0.7 per away game (clean sheet in 50%).', 'Historical factors', '•  Napoli home record: Ordinary home record: no strong home-advantage signal.', '•  Lazio away record: Strong travellers: supports Lazio win / X2.', '•  Goal environment: Context for the goals and BTTS markets: neutral on totals, supports BTTS No.', 'Risks', "•  No 1xBet price loaded: value can't be checked.", '•  Injuries/suspensions unknown (add an API-Football key).', '•  Line-ups not confirmed yet.', '2', '★ Under 4.5 goals', 'Over/Under goals · 1xBet odds: not loaded', '81%', '3', 'Over 1.5 goals', 'Over/Under goals · 1xBet odds: not loaded']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', '4', 'Lazio Under 2.5', 'Individual team goals · 1xBet odds: not loaded', '78%', '5', 'Lazio Over 0.5', 'Individual team goals · 1xBet odds: not loaded', '76%', '6', '★ 1st half BTTS No', 'First-half markets · 1xBet odds: not loaded', '76%', '7', 'Double chance 12', 'Double chance / Draw no bet · 1xBet odds: not loaded', '74%', '8', 'Napoli Over 0.5', 'Individual team goals · 1xBet odds: not loaded']
+tapped Insights
+=== OK: offline match tab Insights
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'Lazio have won 8 of their last 10 away matches (D0 L2), scoring 2.0 and conceding 0.7 per game.', 'Matches', '10', 'Wins', '8', 'Draws', '0', 'Losses', '2', 'Goals scored', '20', 'Goals conceded', '7', 'Betting impact: Strong travellers: supports Lazio win / X2.', '10 matches analysed · Sun 22 Mar – Tue 27 Oct · Italian Serie A · Source: ESPN · updated just now', '&#128293;', 'Goal environment', "3+ goals in 6 of Napoli's last 10 home games and 4 of Lazio's last 10 away games; both teams scored in 7 of those 20.", 'Over 2.5 rate']
+   screen: ['Serie A', 'Overview', 'Markets', 'Insights', 'Teams', 'Table', 'BTTS rate', '35%', 'Betting impact: Context for the goals and BTTS markets: neutral on totals, supports BTTS No.', '20 matches analysed · Sun 22 Mar – Tue 27 Oct · Italian Serie A, Champions League · Source: ESPN · updated just now', '&#128293;', 'Current form: Lazio have scored in 11 consecutive matches', 'Lazio have scored in 11 consecutive matches (all competitions, 2026-05-23 – 2026-11-01).', 'Matches', '11', 'Wins', '10', 'Draws', '1', 'Losses', '0', 'Goals scored', '26', 'Goals conceded', '9']
+tapped Teams
+=== OK: offline match tab Teams
+   screen: ['Serie A', 'Markets', 'Insights', 'Teams', 'Table', 'Form', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Napoli', 'Italy', 'Italian Serie A', 'vs', 'Lazio', 'Italy', 'Italian Serie A', '#10', 'League position', '#1', '14']
+tapped Table
+=== OK: offline match tab Table
+   screen: ['Serie A', 'Insights', 'Teams', 'Table', 'Form', 'H2H', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Italian Serie A', '#', 'Team', 'P', 'W', 'D', 'L', 'GD', 'Pts', '1', 'LAZ']
+tapped Form
+=== OK: offline match tab Form
+   screen: ['Serie A', 'Teams', 'Table', 'Form', 'H2H', 'BTTS', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Napoli', '40%', 'Win %', '1.9', 'Scored/gm', '1.8', 'Conceded/gm', '2', 'Clean sheets', 'Attack: average · Defence: weak · Record W4 D2 L4 (last 10)', 'L']
+tapped H2H
+=== OK: offline match tab H2H
+   screen: ['Serie A', 'Table', 'Form', 'H2H', 'BTTS', 'Squad', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Head-to-Head (last 5)', '1', '  –  1  –  ', '3', 'Napoli wins', 'Draws', 'Lazio wins', 'Goals', 'Napoli 5 · 8 Lazio', 'Average goals per match', '2.6']
+tapped BTTS
+=== OK: offline match tab BTTS
+   screen: ['Serie A', 'Form', 'H2H', 'BTTS', 'Squad', 'Venue', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Both Teams to Score', 'Low', 'YES', '56% probability', 'Odds: N/A', 'NO', '44% probability', 'Odds: N/A', 'Recommended: BTTS Yes', 'Odds: not available - the free data source publishes no BTTS prices, so this is a probability estimate, not a value bet.', 'Why']
+tapped Squad
+=== OK: offline match tab Squad
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', "Football injury lists aren't in the free feed. Check the line-ups below once they're confirmed.", 'Line-ups: not confirmed yet. They usually appear 20-60 minutes before kick-off; reopen this match then.']
+tapped Venue
+=== OK: offline match tab Venue
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', 'Venue', 'Stadium', 'Stadio Diego Armando Maradona', 'City', 'Napoli', 'Home side', 'Napoli', 'Weather at kick-off', 'Conditions', 'Clear sky', 'Temperature']
+tapped Odds
+=== OK: offline match tab Odds
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'No 1xBet prices entered for this match.', 'Enter 1xBet odds', 'Our fair odds (estimate, not a bookmaker price)', 'Napoli', 'fair 2.79', 'best 2.25', '-19.3%', 'Draw']
+NOT FOUND Delete
+tapped Enter 1xBet odds
+=== OK: offline 1xBet form
+tapped Draw
+NOT FOUND Save & analyse
+=== OK: offline 1xBet saved
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5']
+NOT FOUND Overview
+=== OK: offline match tab Overview
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Serie A', 'Napoli', 'Home', '14:30', 'Sun 8 Nov', 'Lazio', 'Away', 'Stadio Diego Armando Maradona, Napoli', '1xBet odds', 'Automatic: add your free The Odds API key in Settings to download 1xBet prices. Without it you can type them in from your 1xBet app.', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5']
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5', 'Both teams to score']
+=== OK: offline back to list
+NOT FOUND Home
+NOT FOUND Search teams or competitions
+=== OK: offline search typed
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5', 'Both teams to score']
+NOT FOUND Team
+=== OK: offline team page
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Add key', 'Fill in only the markets you want analysed (decimal odds, e.g. 1.85).', 'Match result (1X2)', 'Napoli', '3.40', 'Draw', 'Lazio', 'Total goals', 'Over 0.5', 'Under 0.5', 'Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5', 'Both teams to score']
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'Over 3.5', 'Under 3.5', 'Over 4.5', 'Under 4.5', 'Both teams to score', 'BTTS Yes', 'BTTS No', 'Double chance', 'Double chance 1X', 'Double chance X2', 'Double chance 12', 'Draw no bet', 'Napoli (DNB)', 'Lazio (DNB)', 'First-half result', '1st half: Napoli', '1st half: Draw', '1st half: Lazio', 'First-half goals']
+=== OK: offline team page scrolled
+   screen: ['Serie A', 'H2H', 'BTTS', 'Squad', 'Venue', 'Odds', 'First-half result', '1st half: Napoli', '1st half: Draw', '1st half: Lazio', 'First-half goals', '1H Over 0.5', '1H Under 0.5', '1H Over 1.5', '1H Under 1.5', 'First-half BTTS', '1H BTTS Yes', '1H BTTS No', 'Team goals', 'Napoli O0.5', 'Napoli U0.5', 'Lazio O0.5', 'Lazio U0.5', 'Napoli O1.5', 'Napoli U1.5']
+=== OK: offline back from team
+NOT FOUND Clear search
+=== OK: offline search cleared
+=== OK: offline landscape
+=== OK: offline portrait
+########## PASS 3: FRESH INSTALL WITH NO INTERNET (empty data) ##########
+Success
+=== OK: empty-offline launch
+   screen: ['Matchday', 'Updated never · free public data, no account needed', 'Search teams or competitions', 'All sports', 'Popular', 'All', 'Today', 'Tomorrow', 'Next 7 days', 'BTTS Yes', 'Times shown in Qatar time (AST)', "Champions League: couldn't load (check your connection).", "Premier League: couldn't load (check your connection).", "La Liga: couldn't load (check your connection).", "Europa League: couldn't load (check your connection).", "Bundesliga: couldn't load (check your connection).", "Serie A: couldn't load (check your connection).", "Ligue 1: couldn't load (check your connection).", "NBA: couldn't load (check your connection).", "ATP Tennis: couldn't load (check your connection).", 'No matches found', 'Pull to refresh, change the filters, or enable more competitions in Settings.', 'Home', 'Predictions', 'Live']
+tapped Predictions
+=== OK: empty-offline tab Predictions
+tapped Live
+=== OK: empty-offline tab Live
+tapped Favourites
+=== OK: empty-offline tab Favourites
+tapped Settings
+=== OK: empty-offline tab Settings
+tapped Home
+=== OK: empty-offline tab Home
+tapped Home
+tapped Search teams or competitions
+=== OK: empty-offline search typed
+   screen: ['Matchday', 'Updated never · free public data, no account needed', 'madrid', 'No results', 'Home', 'Predictions', 'Live', 'Favourites', 'Settings']
+NOT FOUND Team
+=== OK: empty-offline team page
+   screen: ['Matchday', 'Updated never · free public data, no account needed', 'madrid', 'No results', 'Home', 'Predictions', 'Live', 'Favourites', 'Settings']
+   screen: ['Matchday', 'Updated never · free public data, no account needed', 'madrid', 'No results', 'Home', 'Predictions', 'Live', 'Favourites', 'Settings']
+=== OK: empty-offline team page scrolled
+   screen: ['Matchday', 'Updated never · free public data, no account needed', 'madrid', 'No results', 'Home', 'Predictions', 'Live', 'Favourites', 'Settings']
+=== OK: empty-offline back from team
+NOT FOUND Clear search
+=== OK: empty-offline search cleared
+########## MEMORY ##########
+  Native Heap    12230    12192        0       48    13468    23444    13311     6284
+           Java Heap:    12684                          28800
+         Native Heap:    12192                          13468
+           TOTAL PSS:   104610            TOTAL RSS:   196636       TOTAL SWAP PSS:      402
+=================== CRASH BUFFER ===================
+=================== APP WARNINGS/ERRORS ===================
+11-07 20:07:28.617  9599  9599 W MatchRepository: Unavailable: standings:soccer/uefa.champions (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.629  9599  9599 W MatchRepository: Unavailable: standings:soccer/eng.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.633  9599  9599 W MatchRepository: Unavailable: standings:soccer/esp.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.665  9599  9599 W MatchRepository: Unavailable: standings:soccer/uefa.europa (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.669  9599  9599 W MatchRepository: Unavailable: standings:soccer/ger.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.679  9599  9599 W MatchRepository: Unavailable: standings:soccer/ita.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:28.687  9599  9599 W MatchRepository: Unavailable: standings:soccer/fra.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.272  9599  9626 W MatchRepository: Unavailable: standings:soccer/uefa.champions (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.275  9599  9626 W MatchRepository: Unavailable: standings:soccer/eng.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.278  9599  9626 W MatchRepository: Unavailable: standings:soccer/esp.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.282  9599  9626 W MatchRepository: Unavailable: standings:soccer/uefa.europa (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.286  9599  9626 W MatchRepository: Unavailable: standings:soccer/ger.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.289  9599  9626 W MatchRepository: Unavailable: standings:soccer/ita.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:07:29.295  9599  9626 W MatchRepository: Unavailable: standings:soccer/fra.1 (UnknownHostException: Unable to resolve host "site.api.espn.com": No address associated with hostname)
+11-07 20:08:36.304  9599  9626 W TeamRepository: Unavailable: search:madrid (UnknownHostException)
+SMOKE TEST PASSED
