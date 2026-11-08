@@ -197,6 +197,8 @@ class MatchRepository(
         }.filter { comp.sport != SportType.TENNIS || it.kickoff >= now - 2 * DAY }
             .distinctBy { it.id }
         if (rows.isNotEmpty()) db.matches().upsert(rows)
+        Log.i("MatchdayDiag", "load ${comp.key} days=${days.first()}..${days.last()} boards=${okBoards.size}/${boards.size} rows=${rows.size} " +
+            rows.groupingBy { it.state }.eachCount() + " soon=" + rows.filter { it.kickoff in (now - 4 * HOUR)..(now + 12 * HOUR) }.joinToString { "${it.homeTeam}-${it.awayTeam}@${it.kickoff}/${it.state}" })
         // Half-time scores of finished football matches (to settle first-half picks).
         if (comp.sport == SportType.FOOTBALL) runCatching {
             val ht = HashMap<String, String>()

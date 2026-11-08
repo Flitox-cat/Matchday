@@ -56,14 +56,19 @@ search_flow() {
   tap_text "Clear search"; sleep 3; check "$1 search cleared"
 }
 
+dump_diag() { echo "--- $1" >> diag.log; adb logcat -d | grep -E "MatchdayDiag|Skipping match|Caused by" | tail -40 >> diag.log; }
+
 run_pass() {
   label=$1
   adb shell am force-stop $PKG
   adb shell am start -W -n $PKG/.MainActivity >/dev/null
   sleep 25; check "$label launch"; screen_texts
+  dump_diag "$label launch"
   for tab in Predictions Live Favourites Settings Home; do
     tap_text "$tab"; sleep 6; check "$label tab $tab"
+    if [ "$tab" = "Live" ]; then screen_texts; fi
   done
+  sleep 70; dump_diag "$label after live poll"; screen_texts
   sleep 5
   # Filter to football so the team/table/H2H sections are exercised with real data.
   tap_text "BTTS Yes"; sleep 3; check "$label filter BTTS Yes"; screen_texts
@@ -128,6 +133,8 @@ echo "=================== CRASH BUFFER ==================="
 adb logcat -d -b crash
 echo "=================== APP WARNINGS/ERRORS ==================="
 adb logcat -d | grep -E "MatchRepository|TeamRepository|OneXBet|HomeViewModel|AndroidRuntime: (FATAL|java|Caused)" | tail -60
+echo "=================== DIAG ==================="
+cat diag.log 2>/dev/null | head -80
 
 if [ $FAIL -ne 0 ]; then echo "SMOKE TEST FAILED"; exit 1; fi
 echo "SMOKE TEST PASSED"

@@ -118,6 +118,9 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
             DayFilter.WEEK -> !day(m).isAfter(today.plusDays(7))
         }
         val upcoming = filtered.filter { it.status == MatchStatus.UPCOMING && dayOk(it) }
+        android.util.Log.i("MatchdayDiag", "home all=${all.size} filtered=${filtered.size} live=${filtered.count { it.status == MatchStatus.LIVE }} " +
+            "today=${upcoming.count { day(it) == today }} zone=$zone today=$today f=$f soon=" +
+            all.filter { kotlin.math.abs(it.kickoff - System.currentTimeMillis()) < 6 * 3_600_000L }.joinToString { "${it.homeTeam}@${it.kickoff}/${it.status}/${day(it)}" })
         HomeUiState(
             live = filtered.filter { it.status == MatchStatus.LIVE },
             today = upcoming.filter { day(it) == today },
