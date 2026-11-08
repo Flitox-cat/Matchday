@@ -550,6 +550,21 @@ class MatchRepository(
     }
 
     /** Deep analysis for one match: last 5, head-to-head, line-ups, injuries, weather. */
+    /** Fresh live statistics for an in-play match (ESPN summary, read field by field). Null when unavailable. */
+    suspend fun liveStats(item: MatchItem): com.matchday.app.domain.LiveStats? {
+        val e = db.matches().byId(item.id) ?: return null
+        val comp = item.competition
+        return try {
+            val raw = gate.withPermit { espn.summaryRaw(comp.espnSport, comp.espnLeague, e.eventId) }
+            com.matchday.app.domain.LiveStats.parse(raw, item.homeTeam, item.awayTeam, e.homeId, e.awayId)
+        } catch (ex: kotlinx.coroutines.CancellationException) {
+            throw ex
+        } catch (ex: Exception) {
+            Log.w(TAG, "Live stats unavailable for ${item.id}: ${ex.javaClass.simpleName}")
+            null
+        }
+    }
+
     fun loadDetail(item: MatchItem): Flow<DetailExtras> = flow {
         val comp = item.competition
         val entity = db.matches().byId(item.id)

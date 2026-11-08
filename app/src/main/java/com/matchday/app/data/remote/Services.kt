@@ -21,6 +21,14 @@ interface EspnService {
         @Query("event") eventId: String,
     ): ESummary
 
+    /** Same as [summary] but untyped, so live stats are read field by field and never break the page. */
+    @GET("apis/site/v2/sports/{sport}/{league}/summary")
+    suspend fun summaryRaw(
+        @Path("sport") sport: String,
+        @Path("league") league: String,
+        @Query("event") eventId: String,
+    ): kotlinx.serialization.json.JsonObject
+
     @GET("apis/site/v2/sports/{sport}/{league}/teams/{id}")
     suspend fun team(
         @Path("sport") sport: String,

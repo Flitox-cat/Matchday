@@ -78,14 +78,23 @@ import com.matchday.app.ui.components.sportColor
 import com.matchday.app.ui.theme.Accent
 
 // Match overview + AI prediction + best bet live on Overview; the rest follow the analysis order.
-private val tabs = listOf("Overview", "Markets", "Insights", "Teams", "Table", "Form", "H2H", "BTTS", "Squad", "Venue", "Odds")
+private val tabs = listOf("Overview", "Live", "Markets", "Insights", "Teams", "Table", "Form", "H2H", "BTTS", "Squad", "Venue", "Odds")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchDetailScreen(vm: MatchDetailViewModel, onBack: () -> Unit, onSettings: () -> Unit = {}, onTeam: (String, String) -> Unit = { _, _ -> }) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val liveUi by vm.live.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val item = state.item
+    // A match in play opens on its Live tab (once).
+    var openedLive by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(item?.status) {
+        if (!openedLive && item?.status == MatchStatus.LIVE && item.competition.sport in setOf(SportType.FOOTBALL, SportType.BASKETBALL, SportType.HOCKEY, SportType.TENNIS)) {
+            openedLive = true
+            if (tab == 0) tab = 1
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -110,13 +119,13 @@ fun MatchDetailScreen(vm: MatchDetailViewModel, onBack: () -> Unit, onSettings: 
         if (item == null) {
             EmptyState("Match not available", "It may have been removed from the odds feed. Go back and refresh.")
         } else {
-            DetailBody(vm, state, item, tab, onSettings, onTeam) { tab = it }
+            DetailBody(vm, state, liveUi, item, tab, onSettings, onTeam) { tab = it }
         }
     }
 }
 
 @Composable
-private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: MatchItem, tab: Int, onSettings: () -> Unit, onTeam: (String, String) -> Unit, onTab: (Int) -> Unit) {
+private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: MatchDetailViewModel.LiveUi, item: MatchItem, tab: Int, onSettings: () -> Unit, onTeam: (String, String) -> Unit, onTab: (Int) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         AnimatedVisibility(state.extras.loading) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent.Purple)
@@ -143,15 +152,16 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
                         Overview(item, prediction, state.extras.notes)
                     }
                 }
-                1 -> item { if (analysed(item)) MarketsTab(item, state) else NotForSport(item) }
-                2 -> item { if (isFootball(item)) InsightsTab(item, state) else NotForSport(item) }
-                3 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
-                4 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
-                5 -> item { RecentFormTab(item, state.extras) }
-                6 -> item { HeadToHeadTab(item, state.extras) }
-                7 -> item { if (isFootball(item)) BttsTab(item, state.extras) else NotForSport(item) }
-                8 -> item { SquadTab(item, state) }
-                9 -> item { ConditionsTab(item, state) }
+                1 -> item { if (analysed(item)) LiveTab(item, liveUi, state) else NotForSport(item) }
+                2 -> item { if (analysed(item)) MarketsTab(item, state) else NotForSport(item) }
+                3 -> item { if (isFootball(item)) InsightsTab(item, state) else NotForSport(item) }
+                4 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
+                5 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
+                6 -> item { RecentFormTab(item, state.extras) }
+                7 -> item { HeadToHeadTab(item, state.extras) }
+                8 -> item { if (isFootball(item)) BttsTab(item, state.extras) else NotForSport(item) }
+                9 -> item { SquadTab(item, state) }
+                10 -> item { ConditionsTab(item, state) }
                 else -> item {
                     Column {
                         if (analysed(item)) OneXBetSection(item, state, onSave = { vm.saveOneXBet(it) }, onClear = { vm.clearOneXBet() }, onLoadApi = { vm.loadOneXBetFromApi() }, onSettings = onSettings)

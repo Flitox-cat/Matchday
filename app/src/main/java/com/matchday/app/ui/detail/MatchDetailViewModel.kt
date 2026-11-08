@@ -201,6 +201,75 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
             }
             watchLiveOdds()
         }
+        startLiveLoop()
+    }
+
+    // ------------------------------------------------------------------ live intelligence
+    data class LiveUi(
+        val analysis: com.matchday.app.domain.LiveAnalysis? = null,
+        val stats: com.matchday.app.domain.LiveStats? = null,
+        val changes: List<Pair<Long, String>> = emptyList(),   // what each score change did
+        val loading: Boolean = false,
+        val failed: Boolean = false,
+        val updatedAt: Long? = null,
+    )
+
+    private val _live = MutableStateFlow(LiveUi())
+    val live: StateFlow<LiveUi> = _live
+    private var liveLoop: Job? = null
+    private val snapshots = ArrayDeque<com.matchday.app.domain.LiveStats>()
+
+    /** While the match is in play: re-read live stats every 30 s and recompute everything. */
+    private fun startLiveLoop() {
+        if (liveLoop != null) return
+        liveLoop = viewModelScope.launch {
+            while (true) {
+                val m = item.value
+                if (m != null && m.status == MatchStatus.LIVE) {
+                    if (_live.value.analysis == null) _live.value = _live.value.copy(loading = true)
+                    val st = withContext(Dispatchers.IO) { runCatching { c.matches.liveStats(m) }.getOrNull() }
+                    if (st != null) { snapshots.addLast(st); while (snapshots.size > 80) snapshots.removeFirst() }
+                    recomputeLive(m, st ?: _live.value.stats, failed = st == null)
+                }
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
+
+    private fun recomputeLive(m: MatchItem, st: com.matchday.app.domain.LiveStats?, failed: Boolean) {
+        val cur = state.value
+        val prior = when (m.competition.sport) {
+            SportType.FOOTBALL -> (cur.extras.prediction ?: m.prediction).let { com.matchday.app.domain.LivePrior(it?.expectedHome, it?.expectedAway) }
+            SportType.TENNIS -> cur.markets?.takeIf { it.expectedHome > 0 }.let { com.matchday.app.domain.LivePrior(null, null, it?.expectedHome, it?.expectedAway) }
+            else -> cur.markets?.takeIf { it.expectedHome > 0 }.let { com.matchday.app.domain.LivePrior(it?.expectedHome, it?.expectedAway) }
+        }
+        // Only fresh LIVE 1xBet prices are attached; anything older is never shown as a current price.
+        val snap = (oneX.value as? OneXBetState.Ok)?.current?.takeIf { it.live && System.currentTimeMillis() - it.fetchedAt < 5 * 60_000L }
+        val a = runCatching {
+            com.matchday.app.domain.LiveEngine.analyze(m, st, prior, snap?.prices, snap?.let { "1xBet live" }, snapshots.toList().dropLast(1))
+        }.getOrNull()
+        val before = _live.value.analysis
+        var changes = _live.value.changes
+        if (before != null && a != null && before.score != a.score) {
+            fun pr(x: com.matchday.app.domain.LiveAnalysis, sel: String) = x.markets.firstOrNull { (it.market == "1X2" || it.market == "ML") && it.sel == sel }?.probability
+            val hb = pr(before, "HOME"); val ha = pr(a, "HOME"); val ab = pr(before, "AWAY"); val aa = pr(a, "AWAY")
+            val msg = "Score ${before.score} → ${a.score} at ${a.clockLabel}: " +
+                (if (hb != null && ha != null) "${m.homeTeam} win ${Math.round(hb * 100)}% → ${Math.round(ha * 100)}%" else "") +
+                (if (ab != null && aa != null) ", ${m.awayTeam} ${Math.round(ab * 100)}% → ${Math.round(aa * 100)}%" else "") +
+                ". Projections, next-score and totals recalculated; 1xBet odds refresh if auto-load is on."
+            changes = (listOf(System.currentTimeMillis() to msg) + changes).take(10)
+        }
+        _live.value = LiveUi(a, st, changes, loading = false, failed = failed && st == null, updatedAt = if (st != null) System.currentTimeMillis() else _live.value.updatedAt)
+    }
+
+    /** Re-evaluate immediately when new live odds arrive. */
+    fun refreshLiveNow() {
+        val m = item.value ?: return
+        viewModelScope.launch {
+            val st = withContext(Dispatchers.IO) { runCatching { c.matches.liveStats(m) }.getOrNull() }
+            if (st != null) snapshots.addLast(st)
+            recomputeLive(m, st ?: _live.value.stats, st == null)
+        }
     }
 
     private var liveWatch: Job? = null
@@ -276,6 +345,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
             oneX.value = st
             val status = runCatching { c.oneXBet.apiStatus(m) }.getOrDefault(ApiStatus.NoKey)
             api.value = OneXApi(status, false, msg)
+            if (m.status == MatchStatus.LIVE) recomputeLive(m, _live.value.stats, false)
         }
     }
 

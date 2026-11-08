@@ -70,6 +70,36 @@ sport_flow() {
   tap_text "$2"; sleep 2
 }
 
+tap_prefix() {
+  dump
+  python3 - "$1" <<'PY'
+import re, sys, subprocess
+t = sys.argv[1]
+x = open('ui.xml', encoding='utf-8', errors='ignore').read()
+for m in re.finditer(r'<node [^>]*>', x):
+    n = m.group(0)
+    txt = re.search(r' text="([^"]*)"', n)
+    if txt and txt.group(1).startswith(t):
+        b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+        if b:
+            x1, y1, x2, y2 = map(int, b.groups())
+            subprocess.run(['adb', 'shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2)])
+            print('tapped', txt.group(1)); break
+else:
+    print('NOT FOUND prefix', t)
+PY
+}
+
+# Open the first match in play and read its Live tab (stats, intelligence, live markets).
+live_flow() {
+  tap_text "Live"; sleep 5
+  tap_prefix "LIVE"; sleep 25; check "$1 live match page"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input keyevent 4; sleep 4; check "$1 back from live match"
+}
+
 run_pass() {
   label=$1
   adb shell am force-stop $PKG
@@ -108,6 +138,7 @@ run_pass() {
   adb shell input swipe 500 1500 500 700 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4; check "$label back to list"
   search_flow "$label"
+  live_flow "$label"
   sport_flow "$label" "Basketball"
   sport_flow "$label" "Tennis"
   # Rotate to landscape and back (configuration change)
