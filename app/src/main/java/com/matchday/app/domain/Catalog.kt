@@ -50,7 +50,7 @@ object Catalog {
 
     val DEFAULT_ENABLED: Set<String> = setOf(
         "soccer/uefa.champions", "soccer/eng.1", "soccer/esp.1", "soccer/uefa.europa",
-        "soccer/ger.1", "soccer/ita.1", "soccer/fra.1", "basketball/nba", "tennis/atp",
+        "soccer/ger.1", "soccer/ita.1", "soccer/fra.1", "basketball/nba", "tennis/atp", "tennis/wta", "hockey/nhl",
     )
 
     fun find(key: String): Competition = ALL.firstOrNull { it.key == key }

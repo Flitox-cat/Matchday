@@ -58,6 +58,18 @@ search_flow() {
 
 dump_diag() { echo "--- $1" >> diag.log; adb logcat -d | grep -E "needed repair|skipped|could be listed|Skipping match|Scoreboard" | head -20 >> diag.log; }
 
+# Open the first match of a sport and check its Markets and Odds tabs.
+sport_flow() {
+  tap_text "Home"; sleep 3
+  tap_text "$2"; sleep 4; check "$1 filter $2"; screen_texts
+  adb shell input swipe 500 1500 500 900 300; sleep 2
+  adb shell input tap 540 1300; sleep 15; check "$1 open $2 match"; screen_texts
+  tap_text "Markets"; sleep 8; check "$1 $2 Markets"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input keyevent 4; sleep 4
+  tap_text "$2"; sleep 2
+}
+
 run_pass() {
   label=$1
   adb shell am force-stop $PKG
@@ -96,6 +108,8 @@ run_pass() {
   adb shell input swipe 500 1500 500 700 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4; check "$label back to list"
   search_flow "$label"
+  sport_flow "$label" "Basketball"
+  sport_flow "$label" "Tennis"
   # Rotate to landscape and back (configuration change)
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 1; sleep 5; check "$label landscape"
