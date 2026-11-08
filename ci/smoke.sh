@@ -60,10 +60,10 @@ dump_diag() { echo "--- $1" >> diag.log; adb logcat -d | grep -E "needed repair|
 
 # Open the first match of a sport and check its Markets and Odds tabs.
 sport_flow() {
+  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
   tap_text "Home"; sleep 3
   tap_text "$2"; sleep 4; check "$1 filter $2"; screen_texts
-  adb shell input swipe 500 1500 500 900 300; sleep 2
-  adb shell input tap 540 1300; sleep 15; check "$1 open $2 match"; screen_texts
+  open_card; sleep 10; check "$1 open $2 match"; screen_texts
   tap_text "Markets"; sleep 8; check "$1 $2 Markets"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4
@@ -90,8 +90,16 @@ else:
 PY
 }
 
+open_card() {
+  tap_prefix "Today "; sleep 3
+  dump; grep -q '"Overview"' ui.xml || { tap_prefix "Tomorrow "; sleep 3; }
+  dump; grep -q '"Overview"' ui.xml || { tap_prefix "Next "; sleep 3; }
+  dump; grep -q '"Overview"' ui.xml && echo "match page opened" || echo "MATCH PAGE NOT OPENED"
+}
+
 # Open the first match in play and read its Live tab (stats, intelligence, live markets).
 live_flow() {
+  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
   tap_text "Live"; sleep 5
   tap_prefix "LIVE"; sleep 25; check "$1 live match page"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
@@ -116,9 +124,8 @@ run_pass() {
   tap_text "BTTS Yes"; sleep 3; check "$label filter BTTS Yes"; screen_texts
   tap_text "BTTS Yes"; sleep 2
   tap_text "Football"; sleep 4; screen_texts
-  # Open a match: tap the "X" (draw odds) box inside the first football card, else the first "1" box.
-  tap_text "X"; sleep 2
-  dump; grep -q '"Overview"' ui.xml || { tap_text "1"; sleep 2; }
+  # Open a match: tap the kick-off label of the first card ("Today 22:45" / "Tomorrow 01:00").
+  open_card
   sleep 8; check "$label open match"; screen_texts
   tap_text "Markets"; sleep 10; check "$label match tab Markets"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
