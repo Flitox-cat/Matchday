@@ -97,6 +97,17 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Switches on newly added competitions once, without undoing the user's own choices. */
+    suspend fun addNewDefaults(version: String, keys: Set<String>) {
+        val flag = booleanPreferencesKey("defaults_added_$version")
+        context.dataStore.edit {
+            if (it[flag] == true) return@edit
+            val cur = it[K.leagues]
+            if (cur != null) it[K.leagues] = cur + keys
+            it[flag] = true
+        }
+    }
+
     suspend fun setRefreshMinutes(m: Int) { context.dataStore.edit { it[K.refresh] = m } }
     suspend fun setDeviceZone(v: Boolean) { context.dataStore.edit { it[K.deviceZone] = v } }
     suspend fun setDark(v: Boolean) { context.dataStore.edit { it[K.dark] = v } }

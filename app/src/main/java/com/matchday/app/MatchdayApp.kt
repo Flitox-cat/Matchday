@@ -38,6 +38,7 @@ class MatchdayApp : Application() {
         container = AppContainer(this)
         Notifications.createChannel(this)
         appScope.launch {
+            runCatching { container.settings.addNewDefaults("v3", com.matchday.app.domain.Catalog.NEW_DEFAULTS_V3) }
             RefreshScheduler.schedule(this@MatchdayApp, container.settings.current().refreshMinutes)
         }
     }

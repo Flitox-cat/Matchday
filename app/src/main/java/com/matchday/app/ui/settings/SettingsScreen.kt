@@ -148,7 +148,16 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
         item { SectionHeader("Competitions", Accent.Purple) }
         item {
             InfoCard {
-                Catalog.ALL.forEach { comp ->
+                var q by rememberSaveable { mutableStateOf("") }
+                Text("${settings.enabledLeagues.size} of ${Catalog.ALL.size} switched on. More competitions = more data to download on each refresh.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text("Find a league or cup (e.g. Copa del Rey, Brazil, Asia)") },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+                val shown = Catalog.ALL.filter { c -> q.isBlank() || c.title.contains(q.trim(), true) || c.key.contains(q.trim(), true) || c.sport.label.contains(q.trim(), true) }
+                    .groupBy { it.sport }
+                shown.forEach { (sport, list) ->
+                Text(sport.label, style = MaterialTheme.typography.titleSmall, color = Accent.Purple, modifier = Modifier.padding(top = 8.dp))
+                list.forEach { comp ->
                     val on = comp.key in settings.enabledLeagues
                     Row(
                         Modifier.fillMaxWidth().clickable { vm.toggleLeague(comp.key, !on) }.padding(vertical = 4.dp),
@@ -160,6 +169,7 @@ private fun SettingsList(settings: AppSettings, vm: SettingsViewModel) {
                         }
                         Switch(checked = on, onCheckedChange = { vm.toggleLeague(comp.key, it) })
                     }
+                }
                 }
             }
         }
