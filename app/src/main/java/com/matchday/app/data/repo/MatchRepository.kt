@@ -1,5 +1,12 @@
 package com.matchday.app.data.repo
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import com.matchday.app.data.remote.ELeague
+import com.matchday.app.data.remote.EEvent
 import android.util.Log
 import com.matchday.app.data.local.AppDatabase
 import com.matchday.app.data.local.FavouriteEntity
@@ -197,7 +204,8 @@ class MatchRepository(
         }.filter { comp.sport != SportType.TENNIS || it.kickoff >= now - 2 * DAY }
             .distinctBy { it.id }
         if (rows.isNotEmpty()) db.matches().upsert(rows)
-        Log.i("MatchdayDiag", "load ${comp.key} days=${days.first()}..${days.last()} boards=${okBoards.size}/${boards.size} rows=${rows.size} " +
+        if (rows.isEmpty() && okBoards.any { it.events.isNotEmpty() }) Log.w(TAG, "${comp.key}: events found but none could be listed")
+        if (false) Log.i("MatchdayDiag", "load ${comp.key} days=${days.first()}..${days.last()} boards=${okBoards.size}/${boards.size} rows=${rows.size} " +
             rows.groupingBy { it.state }.eachCount() + " soon=" + rows.filter { it.kickoff in (now - 4 * HOUR)..(now + 12 * HOUR) }.joinToString { "${it.homeTeam}-${it.awayTeam}@${it.kickoff}/${it.state}" })
         // Half-time scores of finished football matches (to settle first-half picks).
         if (comp.sport == SportType.FOOTBALL) runCatching {
@@ -224,11 +232,80 @@ class MatchRepository(
     }
 
     private suspend fun fetchBoard(comp: Competition, date: String?): EScoreboard? = gate.withPermit {
-        try {
+        val raw = try {
             espn.scoreboard(comp.espnSport, comp.espnLeague, date)
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Scoreboard ${comp.key} $date unavailable: ${e.javaClass.simpleName}")
+            return@withPermit null
         }
+        decodeBoard(comp, date, raw)
+    }
+
+    /**
+     * Decodes a scoreboard match by match. A field the app can't read (the feed changes without
+     * notice) only removes that optional field - never the match, and never the whole day.
+     */
+    private fun decodeBoard(comp: Competition, date: String?, raw: JsonObject): EScoreboard {
+        val json = Network.json
+        val leagues = (raw["leagues"] as? JsonArray)?.mapNotNull {
+            runCatching { json.decodeFromJsonElement(ELeague.serializer(), it) }.getOrNull()
+        }.orEmpty()
+        val events = (raw["events"] as? JsonArray)?.mapNotNull { el ->
+            runCatching { json.decodeFromJsonElement(EEvent.serializer(), el) }.getOrElse { first ->
+                Log.w(TAG, "Event in ${comp.key} $date needed repair: ${first.message?.take(200)}")
+                runCatching { json.decodeFromJsonElement(EEvent.serializer(), strip(el)) }
+                    .onFailure { Log.e(TAG, "Event in ${comp.key} $date skipped", it) }
+                    .getOrNull()
+            }
+        }.orEmpty()
+        return EScoreboard(events, leagues)
+    }
+
+    /** Keeps only the fields needed to list a match (teams, time, status, score, venue). */
+    private fun strip(el: JsonElement): JsonElement {
+        val e = el as? JsonObject ?: return el
+        fun obj(o: JsonElement?, keep: Set<String>) = (o as? JsonObject)?.let { JsonObject(it.filterKeys { k -> k in keep }) }
+        val statusKeep = setOf("clock", "displayClock", "period", "type")
+        fun status(s: JsonElement?) = (s as? JsonObject)?.let { st ->
+            JsonObject(st.filterKeys { it in statusKeep }.mapValues { (k, v) ->
+                if (k == "type") obj(v, setOf("name", "state", "completed", "detail", "shortDetail")) ?: v else v
+            })
+        }
+        fun competitor(c: JsonElement): JsonElement {
+            val o = c as? JsonObject ?: return c
+            val m = o.filterKeys { it in setOf("id", "homeAway", "winner", "form", "score") }.toMutableMap()
+            obj(o["team"], setOf("id", "displayName", "shortDisplayName", "abbreviation", "logo"))?.let { m["team"] = it }
+            obj(o["athlete"], setOf("displayName"))?.let { m["athlete"] = it }
+            (o["linescores"] as? JsonArray)?.let { ls ->
+                m["linescores"] = JsonArray(ls.mapNotNull { l ->
+                    (l as? JsonObject)?.get("value")?.let { v -> (v as? JsonPrimitive)?.doubleOrNull?.let { JsonObject(mapOf("value" to JsonPrimitive(it))) } }
+                })
+            }
+            return JsonObject(m)
+        }
+        fun comp(c: JsonElement): JsonElement {
+            val o = c as? JsonObject ?: return c
+            val m = o.filterKeys { it in setOf("id", "date") }.toMutableMap()
+            status(o["status"])?.let { m["status"] = it }
+            obj(o["venue"], setOf("fullName", "address", "court"))?.let { m["venue"] = it }
+            (o["competitors"] as? JsonArray)?.let { m["competitors"] = JsonArray(it.map(::competitor)) }
+            return JsonObject(m)
+        }
+        val m = e.filterKeys { it in setOf("id", "date", "name") }.toMutableMap()
+        status(e["status"])?.let { m["status"] = it }
+        obj(e["venue"], setOf("fullName", "address", "court"))?.let { m["venue"] = it }
+        (e["competitions"] as? JsonArray)?.let { m["competitions"] = JsonArray(it.map(::comp)) }
+        (e["groupings"] as? JsonArray)?.let { gs ->
+            m["groupings"] = JsonArray(gs.mapNotNull { g ->
+                (g as? JsonObject)?.let { go ->
+                    JsonObject(mapOf(
+                        "grouping" to (obj(go["grouping"], setOf("displayName")) ?: JsonObject(emptyMap())),
+                        "competitions" to JsonArray((go["competitions"] as? JsonArray).orEmpty().map(::comp)),
+                    ))
+                }
+            })
+        }
+        return JsonObject(m)
     }
 
     /** Loads league tables (cached 6 h) for the football model. */

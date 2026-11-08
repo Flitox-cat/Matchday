@@ -12,7 +12,7 @@ interface EspnService {
         @Path("sport") sport: String,
         @Path("league") league: String,
         @Query("dates") dates: String? = null,
-    ): EScoreboard
+    ): kotlinx.serialization.json.JsonObject
 
     @GET("apis/site/v2/sports/{sport}/{league}/summary")
     suspend fun summary(

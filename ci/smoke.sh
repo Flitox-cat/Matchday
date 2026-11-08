@@ -56,7 +56,7 @@ search_flow() {
   tap_text "Clear search"; sleep 3; check "$1 search cleared"
 }
 
-dump_diag() { echo "--- $1" >> diag.log; adb logcat -d | grep -E "MatchdayDiag|Skipping match|Caused by" | tail -40 >> diag.log; }
+dump_diag() { echo "--- $1" >> diag.log; adb logcat -d | grep -E "needed repair|skipped|could be listed|Skipping match|Scoreboard" | head -20 >> diag.log; }
 
 run_pass() {
   label=$1
