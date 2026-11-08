@@ -509,10 +509,13 @@ class MatchRepository(
         val comp = if (e.leagueLogo != null) base.copy(emblem = e.leagueLogo) else base
         // A game still marked "in play" long after it must have ended means the feed couldn't be
         // re-read (e.g. offline): don't keep showing it as live.
-        val stale = e.state == "in" && System.currentTimeMillis() - e.kickoff > maxDurationMs(base.sport)
+        val now = System.currentTimeMillis()
+        val stale = e.state == "in" && now - e.kickoff > maxDurationMs(base.sport)
+        // Start time passed but the feed hasn't confirmed it yet: never keep it in the upcoming list.
+        val overdue = e.state == "pre" && now >= e.kickoff
         val status = when {
             stale -> MatchStatus.FINISHED
-            e.state == "in" -> MatchStatus.LIVE
+            e.state == "in" || overdue -> MatchStatus.LIVE
             e.state == "post" -> MatchStatus.FINISHED
             else -> MatchStatus.UPCOMING
         }
@@ -532,7 +535,11 @@ class MatchRepository(
         return MatchItem(
             id = e.id, competition = comp, homeTeam = e.homeTeam, awayTeam = e.awayTeam, kickoff = e.kickoff,
             status = status, homeScore = e.homeScore, awayScore = e.awayScore,
-            statusDetail = if (stale) "Ended? Final score not confirmed yet" else e.statusDetail,
+            statusDetail = when {
+                stale -> "Ended? Final score not confirmed yet"
+                overdue -> if (base.sport == SportType.TENNIS) "Scheduled time passed · waiting to start" else "Start time passed · awaiting live data"
+                else -> e.statusDetail
+            },
             odds = odds, prediction = prediction,
             homeCrest = e.homeLogo, awayCrest = e.awayLogo,
             venue = listOfNotNull(e.venue, e.city).joinToString(", ").ifBlank { null },

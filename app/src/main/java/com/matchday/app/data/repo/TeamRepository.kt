@@ -20,6 +20,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /** A search hit: a club or a competition. */
 data class SearchHit(
@@ -212,6 +213,7 @@ class TeamRepository(private val db: AppDatabase, private val cache: JsonCache) 
     /** Real completed matches for a club over the current and last [SEASONS_BACK] seasons. */
     suspend fun history(leagueKey: String, teamId: String): TeamHistory? = coroutineScope {
         val sport = leagueKey.substringBefore('/')
+        if (sport == "basketball" || sport == "hockey") return@coroutineScope historyUS(leagueKey, teamId)
         if (sport != "soccer") return@coroutineScope null
         val site = safe("team:$sport:$teamId", 24 * HOUR, ETeamResponse.serializer()) {
             gate.withPermit { espn.team(sport, leagueKey.substringAfter('/'), teamId) }
@@ -256,6 +258,50 @@ class TeamRepository(private val db: AppDatabase, private val cache: JsonCache) 
         TeamHistory(teamId, all, years.first, years.last, System.currentTimeMillis())
     }
 
+    /** NBA/NHL-style leagues: this season's (and, early on, last season's) completed games with period scores. */
+    private suspend fun historyUS(leagueKey: String, teamId: String): TeamHistory? {
+        val sport = leagueKey.substringBefore('/')
+        val league = leagueKey.substringAfter('/')
+        val name = Catalog.find(leagueKey).title
+        val cur = safe("sched:$leagueKey:$teamId", 3 * HOUR, ESchedule.serializer()) {
+            gate.withPermit { espn.schedule(sport, league, teamId) }
+        }?.value ?: return null
+        var games = mapHistory(cur, league, name)
+        val year = cur.season?.year
+        if (games.size < 10 && year != null) {
+            val prev = safe("sched:$leagueKey:$teamId:${year - 1}", 30 * DAY, ESchedule.serializer()) {
+                gate.withPermit { espn.schedule(sport, league, teamId, season = year - 1) }
+            }?.value
+            if (prev != null) games = games + mapHistory(prev, league, name)
+        }
+        val all = games.distinctBy { it.id }.sortedByDescending { it.date }
+        return TeamHistory(teamId, all, year?.minus(if (all.size > 0 && games.size > 0) 0 else 0), year, System.currentTimeMillis())
+    }
+
+    /** Current ATP/WTA singles ranking by player name (ESPN, cached 24 h). Empty when unavailable. */
+    suspend fun tennisRanks(tour: String): Map<String, Int> {
+        val ser = kotlinx.serialization.builtins.MapSerializer(String.serializer(), Int.serializer())
+        return safe("tennis:ranks:$tour", 24 * HOUR, ser) {
+            val raw = gate.withPermit { espn.tennisRankings(tour) }
+            val out = HashMap<String, Int>()
+            fun walk(el: kotlinx.serialization.json.JsonElement) {
+                when (el) {
+                    is kotlinx.serialization.json.JsonObject -> {
+                        val ath = el["athlete"] as? kotlinx.serialization.json.JsonObject
+                        val name = (ath?.get("displayName") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                        val rank = (el["current"] ?: el["rank"])?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()?.toInt() }
+                        if (name != null && rank != null && rank > 0 && !out.containsKey(name)) out[name] = rank
+                        el.values.forEach { walk(it) }
+                    }
+                    is kotlinx.serialization.json.JsonArray -> el.forEach { walk(it) }
+                    else -> {}
+                }
+            }
+            walk(raw)
+            out
+        }?.value.orEmpty()
+    }
+
     private data class HistChunk(val matches: List<HistMatch>, val ok: Boolean)
 
     private fun guessSeasonYear(): Int {
@@ -283,6 +329,8 @@ class TeamRepository(private val db: AppDatabase, private val cache: JsonCache) 
                 homeGoals = hg, awayGoals = ag,
                 venue = v?.fullName, city = v?.address?.city,
                 country = v?.address?.country ?: if (!slug.startsWith("uefa.")) countryOfSlug(slug) else null,
+                homeLines = h.linescores.mapNotNull { it.value?.toInt() }.takeIf { it.isNotEmpty() },
+                awayLines = a.linescores.mapNotNull { it.value?.toInt() }.takeIf { it.isNotEmpty() },
             )
         }
 

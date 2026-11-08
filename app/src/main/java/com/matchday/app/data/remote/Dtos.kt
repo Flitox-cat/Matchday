@@ -148,7 +148,7 @@ data class EComp(
     val status: EStatus? = null,
     val venue: EVenue? = null,
     val competitors: List<ECompetitor> = emptyList(),
-    val odds: List<EOdds>? = null,
+    val odds: List<EOdds?>? = null,
 )
 
 // ---- summary?event=ID ----
@@ -230,7 +230,7 @@ data class ESummary(
     val rosters: List<ERoster> = emptyList(),
     val injuries: List<EInjuryTeam> = emptyList(),
     val gameInfo: EGameInfo? = null,
-    val pickcenter: List<EOdds> = emptyList(),
+    val pickcenter: List<EOdds?> = emptyList(),
 )
 
 // ---- teams/{id} and teams/{id}/schedule ----
@@ -440,3 +440,6 @@ data class AfLineup(
 
 @Serializable
 data class AfLineupsResponse(val response: List<AfLineup> = emptyList(), val errors: JsonElement? = null)
+
+@Serializable
+data class OSport(val key: String = "", val group: String? = null, val title: String? = null, val active: Boolean = true)

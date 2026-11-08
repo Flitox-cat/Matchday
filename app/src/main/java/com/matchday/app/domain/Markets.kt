@@ -11,6 +11,13 @@ enum class MarketFamily(val label: String) {
     BTTS("Both teams to score"),
     TEAM_GOALS("Individual team goals"),
     FIRST_HALF("First-half markets"),
+    HANDICAP("Spread / handicap"),
+    POINTS("Total points"),
+    TEAM_POINTS("Individual team points"),
+    PERIODS("Halves, quarters & periods"),
+    SETS("Sets"),
+    GAMES("Games"),
+    PLAYER_GAMES("Player games"),
     OTHER("Other markets"),
 }
 

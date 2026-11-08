@@ -161,7 +161,7 @@ object EspnMapper {
             awayRecord = away.records.firstOrNull()?.summary,
             venue = venueName,
             city = venue?.address?.city,
-            oddsJson = odds(c.odds?.firstOrNull(), now)?.let { com.matchday.app.data.remote.Network.json.encodeToString(OddsSnap.serializer(), it) },
+            oddsJson = odds(c.odds?.firstOrNull { it != null }, now)?.let { com.matchday.app.data.remote.Network.json.encodeToString(OddsSnap.serializer(), it) },
             updatedAt = now,
         )
     }

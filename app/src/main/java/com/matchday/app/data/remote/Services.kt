@@ -37,6 +37,9 @@ interface EspnService {
         @Query("fixture") fixture: Boolean? = null,
     ): ESchedule
 
+    @GET("apis/site/v2/sports/tennis/{tour}/rankings")
+    suspend fun tennisRankings(@Path("tour") tour: String): kotlinx.serialization.json.JsonObject
+
     @GET("apis/v2/sports/{sport}/{league}/standings")
     suspend fun standings(
         @Path("sport") sport: String,
@@ -66,6 +69,10 @@ interface EspnSearchService {
 
 /** The Odds API v4 - only used for 1xBet ("onexbet") prices with the user's own free key. */
 interface OddsApiService {
+    /** Free: list of in-season sports (used to find the right tennis tournament). */
+    @GET("v4/sports")
+    suspend fun sports(@Query("apiKey") apiKey: String): retrofit2.Response<List<OSport>>
+
     /** Free: listing events does not use quota. */
     @GET("v4/sports/{sport}/events")
     suspend fun events(

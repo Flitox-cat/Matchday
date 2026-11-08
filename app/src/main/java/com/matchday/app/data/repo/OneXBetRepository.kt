@@ -31,6 +31,8 @@ data class BookSnapshot(
     val fetchedAt: Long,
     val bookUpdatedAt: Long,
     val prices: List<BookPrice>,
+    val live: Boolean = false,       // downloaded while the match was in play
+    val score: String? = null,       // score at download time (live snapshots)
 ) {
     fun find(market: String, sel: String, point: Double? = null): BookPrice? =
         prices.firstOrNull { it.market == market && it.sel == sel && (point == null || it.point == point) }
@@ -92,9 +94,29 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
             "soccer/usa.1" to "soccer_usa_mls",
             "soccer/ksa.1" to "soccer_saudi_arabia_pro_league",
             "soccer/fifa.world" to "soccer_fifa_world_cup",
+            "basketball/nba" to "basketball_nba",
+            "basketball/wnba" to "basketball_wnba",
+            "basketball/mens-college-basketball" to "basketball_ncaab",
+            "hockey/nhl" to "icehockey_nhl",
         )
 
         fun sportKey(leagueKey: String): String? = SPORT[leagueKey]
+
+        /** Markets asked per sport: main call, then a best-effort call for extra markets. */
+        fun marketsFor(sport: SportType): Pair<String, String> = when (sport) {
+            SportType.FOOTBALL -> MARKETS to MARKETS_EXTRA
+            SportType.BASKETBALL -> "h2h,spreads,totals" to "team_totals,h2h_h1,totals_h1,spreads_h1,h2h_q1,totals_q1"
+            SportType.HOCKEY -> "h2h,spreads,totals" to "h2h_3_way,team_totals,h2h_p1,totals_p1"
+            else -> "h2h,spreads,totals" to ""
+        }
+
+        fun creditEstimate(sport: SportType): Int = when (sport) {
+            SportType.FOOTBALL -> CREDIT_ESTIMATE
+            SportType.BASKETBALL -> 9
+            SportType.HOCKEY -> 7
+            else -> 3
+        }
+
 
         fun slots(home: String, away: String): List<OddsSlot> = listOf(
             OddsSlot("1X2", "HOME", null, home), OddsSlot("1X2", "DRAW", null, "Draw"), OddsSlot("1X2", "AWAY", null, away),
@@ -136,8 +158,8 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
         if (s.oneXBetKey.isBlank()) return ApiStatus.NoKey
         if (System.currentTimeMillis() < s.oddsApiPausedUntil) return ApiStatus.Paused(s.oddsApiPausedUntil)
         if (item != null) {
-            if (item.competition.sport != SportType.FOOTBALL) return ApiStatus.Unsupported("Automatic 1xBet odds are for football only.")
-            if (sportKey(item.competition.key) == null) return ApiStatus.Unsupported("${item.competition.title} isn't covered by The Odds API: enter 1xBet prices by hand.")
+            if (item.competition.sport != SportType.TENNIS && sportKey(item.competition.key) == null)
+                return ApiStatus.Unsupported("${item.competition.title} isn't covered by The Odds API: 1xBet odds unavailable (you can enter them by hand for football).")
         }
         return ApiStatus.Ready(s.oddsApiRemaining)
     }
@@ -183,8 +205,9 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
             else -> null
         }
         val key = settings.current().oneXBetKey
-        val sport = sportKey(item.competition.key) ?: return state(item) to null
         return try {
+            val sport = (if (item.competition.sport == SportType.TENNIS) tennisKey(key, item) else sportKey(item.competition.key))
+                ?: return state(item) to "1xBet odds unavailable: The Odds API doesn't list this ${if (item.competition.sport == SportType.TENNIS) "tournament" else "competition"}."
             val list = cache.get("1x:events:$sport", 6 * HOUR, events) {
                 val r = api.events(sport, key)
                 when {
@@ -194,13 +217,18 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
                 }
                 r.body().orEmpty()
             }
+            val tennis = item.competition.sport == SportType.TENNIS
+            val window = if (tennis) 12 * HOUR else 3 * HOUR
             val ev = list.firstOrNull { e ->
-                abs(EspnMapper.parseTime(e.commenceTime) - item.kickoff) <= 3 * HOUR &&
-                    TeamMatcher.same(e.homeTeam ?: "", item.homeTeam) && TeamMatcher.same(e.awayTeam ?: "", item.awayTeam)
-            } ?: return state(item) to "This match isn't listed by The Odds API yet."
+                abs(EspnMapper.parseTime(e.commenceTime) - item.kickoff) <= window &&
+                    ((TeamMatcher.same(e.homeTeam ?: "", item.homeTeam) && TeamMatcher.same(e.awayTeam ?: "", item.awayTeam)) ||
+                        (tennis && TeamMatcher.same(e.homeTeam ?: "", item.awayTeam) && TeamMatcher.same(e.awayTeam ?: "", item.homeTeam)))
+            } ?: return state(item) to "1xBet odds unavailable: this match isn't listed by The Odds API."
 
-            var resp = api.eventOdds(sport, ev.id, key, MARKETS)
-            if (resp.code() == 422) resp = api.eventOdds(sport, ev.id, key, MARKETS_FALLBACK)
+            val (mainMarkets, extraMarkets) = marketsFor(item.competition.sport)
+            var resp = api.eventOdds(sport, ev.id, key, mainMarkets)
+            if (resp.code() == 422 && item.competition.sport == SportType.FOOTBALL) resp = api.eventOdds(sport, ev.id, key, MARKETS_FALLBACK)
+            if (resp.code() == 422) resp = api.eventOdds(sport, ev.id, key, "h2h")
             val remaining = resp.headers()["x-requests-remaining"]?.toDoubleOrNull()?.toInt()
             if (remaining != null) {
                 settings.setOddsApiRemaining(remaining)
@@ -214,17 +242,22 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
             val body = resp.body() ?: return state(item) to "Empty response from The Odds API."
             val bm = body.bookmakers.firstOrNull { it.key == "onexbet" }
                 ?: return state(item) to "1xBet hasn't published prices for this match yet."
-            val homeName = body.homeTeam ?: ev.homeTeam ?: ""
-            val awayName = body.awayTeam ?: ev.awayTeam ?: ""
-            var snap = parse(bm, homeName, awayName)
+            // Our "home" side is always the app's home team (tennis listings may be reversed).
+            val homeName = item.homeTeam
+            val awayName = item.awayTeam
+            val football = item.competition.sport == SportType.FOOTBALL
+            var snap = if (football) parse(bm, homeName, awayName) else parseOther(bm, homeName, awayName)
             // Extra markets (team goals, first half, handicap): best effort, never fatal.
-            if (snap.prices.isNotEmpty()) runCatching {
-                val extra = api.eventOdds(sport, ev.id, key, MARKETS_EXTRA)
+            if (snap.prices.isNotEmpty() && extraMarkets.isNotEmpty()) runCatching {
+                val extra = api.eventOdds(sport, ev.id, key, extraMarkets)
                 extra.headers()["x-requests-remaining"]?.toDoubleOrNull()?.toInt()?.let { settings.setOddsApiRemaining(it) }
                 extra.body()?.bookmakers?.firstOrNull { it.key == "onexbet" }?.let { xb ->
-                    snap = snap.copy(prices = snap.prices + parse(xb, homeName, awayName).prices)
+                    val more = if (football) parse(xb, homeName, awayName) else parseOther(xb, homeName, awayName)
+                    snap = snap.copy(prices = snap.prices + more.prices)
                 }
             }
+            val live = item.status == com.matchday.app.domain.MatchStatus.LIVE
+            snap = snap.copy(live = live, score = if (live) "${item.homeScore ?: "-"}-${item.awayScore ?: "-"}" else null)
             if (snap.prices.isEmpty()) return state(item) to "1xBet hasn't published prices for this match yet."
             append(item, snap) to null
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -238,6 +271,77 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
     }
 
     private class ApiProblem(msg: String) : Exception(msg)
+
+    private val sportsSer = ListSerializer(com.matchday.app.data.remote.OSport.serializer())
+
+    /** Finds the tennis tournament key whose event list contains this match (listing is free). */
+    private suspend fun tennisKey(key: String, item: MatchItem): String? {
+        val tour = if (item.competition.key.endsWith("wta")) "tennis_wta" else "tennis_atp"
+        val sports = cache.get("1x:sports", 6 * HOUR, sportsSer) {
+            val r = api.sports(key)
+            if (!r.isSuccessful) throw ApiProblem("The Odds API returned error ${r.code()}.")
+            r.body().orEmpty()
+        }.filter { it.key.startsWith(tour) && it.active }
+        for (s in sports) {
+            val evs = runCatching {
+                cache.get("1x:events:${s.key}", 6 * HOUR, events) { api.events(s.key, key).body().orEmpty() }
+            }.getOrNull().orEmpty()
+            val hit = evs.any { e ->
+                val names = setOf(e.homeTeam ?: "", e.awayTeam ?: "")
+                names.any { TeamMatcher.same(it, item.homeTeam) } && names.any { TeamMatcher.same(it, item.awayTeam) }
+            }
+            if (hit) return s.key
+        }
+        return null
+    }
+
+    /** Basketball, hockey and tennis markets (codes: ML REG SPR TOT TT H1ML H1TOT H1SPR Q1ML Q1TOT P1ML P1TOT). */
+    private fun parseOther(bm: OBookmaker, home: String, away: String): BookSnapshot {
+        val now = System.currentTimeMillis()
+        val out = mutableListOf<BookPrice>()
+        fun side(n: String): String? = when {
+            n.equals("Draw", true) || n.equals("Tie", true) -> "DRAW"
+            n == home || TeamMatcher.same(n, home) -> "HOME"
+            n == away || TeamMatcher.same(n, away) -> "AWAY"
+            else -> null
+        }
+        fun sgn(p: Double) = (if (p > 0) "+" else "") + fmt(p)
+        val codes = mapOf(
+            "h2h" to "ML", "h2h_3_way" to "REG", "spreads" to "SPR", "alternate_spreads" to "SPR",
+            "totals" to "TOT", "alternate_totals" to "TOT", "team_totals" to "TT",
+            "h2h_h1" to "H1ML", "totals_h1" to "H1TOT", "spreads_h1" to "H1SPR",
+            "h2h_q1" to "Q1ML", "totals_q1" to "Q1TOT", "h2h_p1" to "P1ML", "totals_p1" to "P1TOT",
+        )
+        for (m in bm.markets) {
+            val code = codes[m.key] ?: continue
+            m.outcomes.forEach { o ->
+                val pt = o.point
+                when (code) {
+                    "ML", "REG", "H1ML", "Q1ML", "P1ML" -> side(o.name)?.let { s ->
+                        val who = when (s) { "HOME" -> home; "AWAY" -> away; else -> "Draw" }
+                        val prefix = when (code) { "REG" -> "Regulation: "; "H1ML" -> "1st half: "; "Q1ML" -> "1st quarter: "; "P1ML" -> "1st period: "; else -> "" }
+                        out += BookPrice(code, s, prefix + who, null, o.price)
+                    }
+                    "SPR", "H1SPR" -> if (pt != null) side(o.name)?.takeIf { it != "DRAW" }?.let { s ->
+                        out += BookPrice(code, s, "${if (code == "H1SPR") "1st half: " else ""}${if (s == "HOME") home else away} ${sgn(pt)}", pt, o.price)
+                    }
+                    "TOT", "H1TOT", "Q1TOT", "P1TOT" -> if (pt != null) {
+                        val dir = if (o.name.equals("Over", true)) "OVER" else if (o.name.equals("Under", true)) "UNDER" else null
+                        val prefix = when (code) { "H1TOT" -> "1st half "; "Q1TOT" -> "1st quarter "; "P1TOT" -> "1st period "; else -> "" }
+                        if (dir != null && out.none { it.market == code && it.sel == dir && it.point == pt })
+                            out += BookPrice(code, dir, "$prefix${o.name} ${fmt(pt)}", pt, o.price)
+                    }
+                    "TT" -> if (pt != null) {
+                        val s = side(o.description ?: "")
+                        val dir = if (o.name.equals("Over", true)) "OVER" else if (o.name.equals("Under", true)) "UNDER" else null
+                        if (s != null && s != "DRAW" && dir != null)
+                            out += BookPrice("TT", "${s}_$dir", "${if (s == "HOME") home else away} ${o.name} ${fmt(pt)}", pt, o.price)
+                    }
+                }
+            }
+        }
+        return BookSnapshot(SOURCE_API, now, EspnMapper.parseTime(bm.lastUpdate).takeIf { it > 0 } ?: now, out)
+    }
 
     private fun parse(bm: OBookmaker, home: String, away: String): BookSnapshot {
         val now = System.currentTimeMillis()

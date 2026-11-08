@@ -56,8 +56,9 @@ class LiveViewModel(private val c: AppContainer) : ViewModel() {
 
     val state: StateFlow<LiveUiState> = combine(c.matches.observeMatches(), notes, lastUpdate) { list, n, t ->
         LiveUiState(
-            live = list.filter { it.status == MatchStatus.LIVE },
-            finished = list.filter { it.status == MatchStatus.FINISHED }.sortedByDescending { it.kickoff }.take(20),
+            live = list.filter { it.status == MatchStatus.LIVE }.sortedBy { it.kickoff },
+            // Finished games stay until the end of the Qatar calendar day on which they ended.
+            finished = list.filter { it.status == MatchStatus.FINISHED && endedToday(it) }.sortedByDescending { it.kickoff },
             notes = n,
             lastUpdate = t,
         )
@@ -76,7 +77,20 @@ class LiveViewModel(private val c: AppContainer) : ViewModel() {
     fun refreshNow() = viewModelScope.launch { poll() }
 }
 
-private const val POLL_MS = 120_000L
+private const val POLL_MS = 30_000L
+
+private val QATAR = java.time.ZoneId.of("Asia/Qatar")
+
+/** Approximate end time (kick-off + typical duration) falls on today's date in Qatar. */
+fun endedToday(m: MatchItem): Boolean {
+    val dur = when (m.competition.sport) {
+        com.matchday.app.domain.SportType.FOOTBALL -> 2 * 3_600_000L
+        com.matchday.app.domain.SportType.TENNIS -> 2 * 3_600_000L
+        else -> (5 * 3_600_000L) / 2
+    }
+    val end = java.time.Instant.ofEpochMilli(m.kickoff + dur).atZone(QATAR).toLocalDate()
+    return end == java.time.LocalDate.now(QATAR)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,7 +114,7 @@ fun LiveScreen(vm: LiveViewModel, onMatch: (String) -> Unit) {
                 Column {
                     Text("Live", style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Auto-refresh every 2 min · updated ${Formats.ago(state.lastUpdate)}",
+                        "Auto-refresh every 30 s · updated ${Formats.ago(state.lastUpdate)}",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -117,7 +131,7 @@ fun LiveScreen(vm: LiveViewModel, onMatch: (String) -> Unit) {
                 items(state.live, key = { "live_${it.id}" }) { m -> MatchCard(m, onClick = { onMatch(m.id) }) }
             }
             if (state.finished.isNotEmpty()) {
-                item { SectionHeader("Recently completed", Color(0xFF7D879E), state.finished.size) }
+                item { SectionHeader("Finished today (Qatar time)", Color(0xFF7D879E), state.finished.size) }
                 items(state.finished, key = { "fin_${it.id}" }) { m -> MatchCard(m, onClick = { onMatch(m.id) }) }
             }
         }

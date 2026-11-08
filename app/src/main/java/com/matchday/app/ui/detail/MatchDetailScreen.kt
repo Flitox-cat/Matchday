@@ -137,13 +137,13 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
             when (tab) {
                 0 -> item {
                     Column {
-                        state.markets?.let { if (isFootball(item)) TopSelectionsCard(item, it, state.insights, compact = true) }
+                        state.markets?.let { if (analysed(item)) TopSelectionsCard(item, it, state.insights, compact = true) }
                         if (isFootball(item)) VerdictCard(item, state)
                         (state.extras.prediction ?: item.prediction)?.injuryImpact?.let { InjuryImpactCard(item, it) }
                         Overview(item, prediction, state.extras.notes)
                     }
                 }
-                1 -> item { if (isFootball(item)) MarketsTab(item, state) else NotForSport(item) }
+                1 -> item { if (analysed(item)) MarketsTab(item, state) else NotForSport(item) }
                 2 -> item { if (isFootball(item)) InsightsTab(item, state) else NotForSport(item) }
                 3 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }
                 4 -> item { if (isFootball(item)) StandingsTab(item, state.extras) else NotForSport(item) }
@@ -154,7 +154,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
                 9 -> item { ConditionsTab(item, state) }
                 else -> item {
                     Column {
-                        if (isFootball(item)) OneXBetSection(item, state, onSave = { vm.saveOneXBet(it) }, onClear = { vm.clearOneXBet() }, onLoadApi = { vm.loadOneXBetFromApi() }, onSettings = onSettings)
+                        if (analysed(item)) OneXBetSection(item, state, onSave = { vm.saveOneXBet(it) }, onClear = { vm.clearOneXBet() }, onLoadApi = { vm.loadOneXBetFromApi() }, onSettings = onSettings)
                         OddsTab(item, odds, prediction)
                     }
                 }
@@ -164,6 +164,9 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, item: Mat
 }
 
 private fun isFootball(item: MatchItem) = item.competition.sport == SportType.FOOTBALL
+
+/** Sports with a full market-analysis engine. */
+private fun analysed(item: MatchItem) = item.competition.sport in setOf(SportType.FOOTBALL, SportType.BASKETBALL, SportType.HOCKEY, SportType.TENNIS)
 
 @Composable
 private fun NotForSport(item: MatchItem) {
@@ -386,6 +389,13 @@ private fun OddsTab(item: MatchItem, odds: OddsSummary?, p: Prediction?) {
                 "via ESPN's free feed. Updated ${Formats.dayTime(odds.fetchedAt, zone)}. Arrows and \"was\" compare with the opening price.",
             color = Accent.Blue,
         )
+        if (item.status != MatchStatus.UPCOMING) {
+            Banner(
+                "Match ${if (item.status == MatchStatus.LIVE) "in play" else "finished"}: these are pre-match prices from the free feed, not live betting options. " +
+                    "Live 1xBet odds appear in the 1xBet card above when loaded.",
+                color = Accent.Orange,
+            )
+        }
         if (p != null) {
             InfoCard {
                 Text("Our fair odds (estimate, not a bookmaker price)", style = MaterialTheme.typography.titleSmall, color = Accent.Purple)

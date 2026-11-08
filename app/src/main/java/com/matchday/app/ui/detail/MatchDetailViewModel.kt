@@ -68,6 +68,7 @@ private data class Research(
     val oneX: OneXBetState,
     val ids: Pair<String?, String?>,
     val api: OneXApi,
+    val ranks: Map<String, Int> = emptyMap(),
 )
 
 class MatchDetailViewModel(private val c: AppContainer, private val id: String) : ViewModel() {
@@ -80,7 +81,8 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
     private val item = c.matches.observeMatch(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val api = MutableStateFlow(OneXApi())
-    private val research = combine(history, oneX, ids, api) { h, o, i, a -> Research(h, o, i, a) }
+    private val ranks = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private val research = combine(history, oneX, ids, api, ranks) { h, o, i, a, r -> Research(h, o, i, a, r) }
 
     val state: StateFlow<DetailUiState> = combine(item, extras, c.matches.observeFavourites(), research) { i, x, f, r ->
         val insights = if (i != null && i.competition.sport == SportType.FOOTBALL && (r.history.home != null || r.history.away != null || x.headToHead.isNotEmpty())) {
@@ -94,9 +96,11 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                 )
             }.getOrDefault(emptyList())
         } else emptyList()
-        val markets = if (i != null && i.competition.sport == SportType.FOOTBALL) {
-            runCatching { marketsFor(i, x, insights, r.oneX, r.history) }.getOrNull()
-        } else null
+        val markets = when {
+            i == null -> null
+            i.competition.sport == SportType.FOOTBALL -> runCatching { marketsFor(i, x, insights, r.oneX, r.history) }.getOrNull()
+            else -> runCatching { otherMarkets(i, x, r.oneX, r.history, r.ranks) }.getOrNull()
+        }
         val verdict = if (i != null && i.competition.sport == SportType.FOOTBALL && !x.loading) {
             runCatching { verdictFor(i, x, insights, r.oneX) }.getOrNull()
         } else null
@@ -136,6 +140,24 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         )
     }
 
+    /** Basketball, hockey and tennis: dedicated engines (see SportEngines). */
+    private fun otherMarkets(i: MatchItem, x: DetailExtras, o: OneXBetState, h: HistoryState, ranks: Map<String, Int>): com.matchday.app.domain.MarketAnalysis? {
+        val ok = o as? OneXBetState.Ok
+        fun rank(n: String) = ranks[n] ?: ranks.entries.firstOrNull { TeamMatcher.same(it.key, n) }?.value
+        return com.matchday.app.domain.SportEngines.analyze(
+            com.matchday.app.domain.SportInputs(
+                sport = i.competition.sport, leagueKey = i.competition.key, home = i.homeTeam, away = i.awayTeam, kickoff = i.kickoff,
+                homeGames = h.home?.games().orEmpty().filter { it.m.date < i.kickoff },
+                awayGames = h.away?.games().orEmpty().filter { it.m.date < i.kickoff },
+                h2h = x.headToHead, prices = ok?.current?.prices, priceSource = ok?.current?.bookmaker,
+                feed = i.odds, injuries = x.injuries, lineupsConfirmed = x.lineups.isNotEmpty(),
+                homeRank = if (i.competition.sport == SportType.TENNIS) rank(i.homeTeam) else null,
+                awayRank = if (i.competition.sport == SportType.TENNIS) rank(i.awayTeam) else null,
+                live = i.status == MatchStatus.LIVE,
+            ),
+        )
+    }
+
     private fun verdictFor(i: MatchItem, x: DetailExtras, insights: List<Insight>, o: OneXBetState): Verdict {
         val p = x.prediction ?: i.prediction
         val btts = x.btts
@@ -160,14 +182,50 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                 }
                 .collect { extras.value = it }
         }
-        if (i.competition.sport == SportType.FOOTBALL) {
-            loadHistory(i)
+        val sport = i.competition.sport
+        if (sport == SportType.FOOTBALL || sport == SportType.BASKETBALL || sport == SportType.HOCKEY || sport == SportType.TENNIS) {
+            if (sport == SportType.TENNIS) {
+                viewModelScope.launch {
+                    val tour = if (i.competition.key.endsWith("wta")) "wta" else "atp"
+                    ranks.value = withContext(Dispatchers.IO) { runCatching { c.teams.tennisRanks(tour) }.getOrDefault(emptyMap()) }
+                }
+            } else loadHistory(i)
             viewModelScope.launch {
                 oneX.value = runCatching { c.oneXBet.state(i) }.getOrDefault(OneXBetState.NotLoaded)
                 val st = runCatching { c.oneXBet.apiStatus(i) }.getOrDefault(ApiStatus.NoKey)
                 api.value = OneXApi(st)
                 val auto = runCatching { c.settings.current().autoLoadOneXBet }.getOrDefault(false)
                 if (st is ApiStatus.Ready && auto && i.status == MatchStatus.UPCOMING && runCatching { c.oneXBet.isStale(i) }.getOrDefault(false)) {
+                    loadOneXBetFromApi()
+                }
+            }
+            watchLiveOdds()
+        }
+    }
+
+    private var liveWatch: Job? = null
+    private var lastScore: String? = null
+    private var lastLiveFetch = 0L
+
+    /**
+     * Live 1xBet odds: re-downloaded when the score changes (goal, set, period...), at most every
+     * 2 minutes (5 for basketball, whose score changes constantly) to protect the free credits.
+     */
+    private fun watchLiveOdds() {
+        if (liveWatch != null) return
+        liveWatch = viewModelScope.launch {
+            item.collect { m ->
+                if (m == null || m.status != MatchStatus.LIVE) return@collect
+                val score = "${m.homeScore}-${m.awayScore}"
+                val auto = runCatching { c.settings.current().autoLoadOneXBet }.getOrDefault(false)
+                val ready = api.value.status is ApiStatus.Ready
+                val minGap = if (m.competition.sport == SportType.BASKETBALL) 5 * 60_000L else 2 * 60_000L
+                val changed = lastScore != null && score != lastScore
+                val first = lastScore == null
+                lastScore = score
+                if (auto && ready && (changed || (first && (oneX.value as? OneXBetState.Ok)?.current?.live != true)) &&
+                    System.currentTimeMillis() - lastLiveFetch > minGap) {
+                    lastLiveFetch = System.currentTimeMillis()
                     loadOneXBetFromApi()
                 }
             }

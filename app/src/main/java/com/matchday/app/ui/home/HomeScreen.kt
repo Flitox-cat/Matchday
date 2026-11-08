@@ -82,19 +82,17 @@ fun HomeScreen(vm: HomeViewModel, onMatch: (String) -> Unit, onSettings: () -> U
 
                 messages.forEach { m -> item { Banner(m) } }
 
-                section("Live now", Accent.Live, state.live, onMatch)
+                // Home = upcoming matches only; live and finished games live in the Live tab.
                 section("Today", Accent.Blue, state.today, onMatch)
                 section("Tomorrow", Accent.Purple, state.tomorrow, onMatch)
                 section("Upcoming popular", Accent.Orange, state.upcomingPopular, onMatch)
-                section("Recently completed", Color(0xFF7D879E), state.completed.take(15), onMatch)
 
-                val nothing = state.live.isEmpty() && state.today.isEmpty() && state.tomorrow.isEmpty() &&
-                    state.upcomingPopular.isEmpty() && state.completed.isEmpty()
+                val nothing = state.today.isEmpty() && state.tomorrow.isEmpty() && state.upcomingPopular.isEmpty()
                 if (nothing && state.loadedOnce) {
                     item {
                         EmptyState(
-                            "No matches found",
-                            "Pull to refresh, change the filters, or enable more competitions in Settings.",
+                            "No upcoming matches",
+                            "Matches in play and today's results are in the Live tab. Pull to refresh, change the filters, or enable more competitions in Settings.",
                         )
                     }
                 }

@@ -18,6 +18,8 @@ data class HistMatch(
     val venue: String? = null,
     val city: String? = null,
     val country: String? = null,
+    val homeLines: List<Int>? = null,   // goals/points per period, quarter or half (basketball, hockey)
+    val awayLines: List<Int>? = null,
 ) {
     val european: Boolean get() = leagueSlug.startsWith("uefa.")
 }

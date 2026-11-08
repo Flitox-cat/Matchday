@@ -250,14 +250,19 @@ fun OneXBetSection(item: MatchItem, state: DetailUiState, onSave: (List<BookPric
         } else {
             when (st) {
                 is OneXBetState.NotLoaded -> {
-                    Text("No 1xBet prices entered for this match.", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Enter 1xBet odds") }
+                    val football = item.competition.sport == com.matchday.app.domain.SportType.FOOTBALL
+                    Text(if (football) "No 1xBet prices for this match yet." else "1xBet odds unavailable for this match until they're loaded above.",
+                        style = MaterialTheme.typography.bodySmall)
+                    if (football) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Green)) { Text("Enter 1xBet odds") }
+                    }
                 }
                 is OneXBetState.Ok -> {
                     OneXBetTable(item, state, st.current, st.history, zone)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Blue)) { Text("Update odds") }
+                        if (item.competition.sport == com.matchday.app.domain.SportType.FOOTBALL)
+                            Button(onClick = { editing = true }, colors = ButtonDefaults.buttonColors(containerColor = Accent.Blue)) { Text("Update odds") }
                         OutlinedButton(onClick = onClear) { Text("Delete") }
                     }
                 }
@@ -311,12 +316,35 @@ private fun OneXBetForm(item: MatchItem, current: BookSnapshot?, onCancel: () ->
 @Composable
 private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapshot, history: List<BookSnapshot>, zone: java.time.ZoneId) {
     val p = state.extras.prediction ?: item.prediction
-    val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", p, state.extras.btts).map { l ->
-        if (l.probability != null) l
+    val football = item.competition.sport == com.matchday.app.domain.SportType.FOOTBALL
+    val lines = VerdictEngine.linesFrom1xBet(snap.prices, "1xBet", if (football) p else null, if (football) state.extras.btts else null).map { l ->
+        if (l.probability != null && football) l
         else l.copy(probability = state.markets?.markets?.firstOrNull { it.market == l.group && it.sel == l.sel && it.point == l.point }?.probability)
     }
     val previous = history.dropLast(1).lastOrNull()
     val first = history.firstOrNull()?.takeIf { history.size > 1 }
+    // Live / pre-match / stale labelling: never show old prices as current.
+    val matchLive = item.status == MatchStatus.LIVE
+    val stale = matchLive && (!snap.live || System.currentTimeMillis() - snap.fetchedAt > 5 * 60_000L)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Pill(if (snap.live) "LIVE ODDS" else "PRE-MATCH ODDS", if (snap.live) Accent.Red else Accent.Blue)
+        if (snap.live && snap.score != null) Text("  at score ${snap.score}", style = MaterialTheme.typography.labelSmall)
+        if (stale) { Spacer(Modifier.width(6.dp)); Pill("STALE", Accent.Orange) }
+    }
+    if (stale) {
+        Text(
+            if (!snap.live) "The match is in play: these are pre-match prices from ${Formats.dayTime(snap.fetchedAt, zone)}, not current odds. Refresh for live odds."
+            else "Live odds temporarily unavailable or not refreshed: last update ${Formats.dayTime(snap.fetchedAt, zone)}. Don't treat them as active prices.",
+            style = MaterialTheme.typography.labelSmall, color = Accent.Orange,
+        )
+    }
+    if (previous != null) {
+        val gone = previous.prices.filter { p0 -> snap.prices.none { it.market == p0.market && it.sel == p0.sel && it.point == p0.point } }
+        if (gone.isNotEmpty() && snap.bookmaker == OneXBetRepository.SOURCE_API) {
+            Text("Suspended / no longer offered since the last update: ${gone.take(6).joinToString { it.label }}${if (gone.size > 6) "…" else ""}.",
+                style = MaterialTheme.typography.labelSmall, color = Accent.Orange)
+        }
+    }
     Text(
         if (snap.bookmaker == OneXBetRepository.SOURCE_API)
             "Genuine 1xBet prices via The Odds API. 1xBet last updated ${Formats.dayTime(snap.bookUpdatedAt, zone)}; downloaded ${Formats.ago(snap.fetchedAt)}."
@@ -326,7 +354,12 @@ private fun OneXBetTable(item: MatchItem, state: DetailUiState, snap: BookSnapsh
     Spacer(Modifier.height(8.dp))
     val groups = listOf("1X2" to "Match result (1X2)", "DC" to "Double chance", "DNB" to "Draw no bet",
         "OU" to "Total goals", "BTTS" to "Both teams to score", "TT" to "Team goals", "1H" to "First-half result",
-        "1HOU" to "First-half goals", "1HBTTS" to "First-half BTTS", "AH" to "Asian handicap")
+        "1HOU" to "First-half goals", "1HBTTS" to "First-half BTTS", "AH" to "Asian handicap",
+        "ML" to "Winner${if (item.competition.sport == com.matchday.app.domain.SportType.HOCKEY) " (incl. OT/SO)" else ""}", "REG" to "Regulation time (60 min)",
+        "SPR" to when (item.competition.sport) { com.matchday.app.domain.SportType.HOCKEY -> "Puck line"; com.matchday.app.domain.SportType.TENNIS -> "Games handicap"; else -> "Point spread" },
+        "TOT" to when (item.competition.sport) { com.matchday.app.domain.SportType.HOCKEY -> "Total goals"; com.matchday.app.domain.SportType.TENNIS -> "Total games"; else -> "Total points" },
+        "H1ML" to "1st half winner", "H1TOT" to "1st half total", "H1SPR" to "1st half spread",
+        "Q1ML" to "1st quarter winner", "Q1TOT" to "1st quarter total", "P1ML" to "1st period result", "P1TOT" to "1st period total")
     Row(Modifier.fillMaxWidth()) {
         Text("Selection", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         listOf("Odds", "Implied", "AI", "Value").forEach {
@@ -413,15 +446,15 @@ private fun ApiStatusBlock(item: MatchItem, state: DetailUiState, onLoadApi: () 
         is ApiStatus.Unsupported -> Text(a.reason, style = MaterialTheme.typography.labelSmall, color = muted)
         is ApiStatus.Ready -> {
             Text(
-                "Automatic via The Odds API: about ${OneXBetRepository.CREDIT_ESTIMATE} credits per load" +
+                "Automatic via The Odds API: about ${OneXBetRepository.creditEstimate(item.competition.sport)} credits per load" +
                     (if (a.creditsLeft >= 0) ", ${a.creditsLeft} left this month." else "."),
                 style = MaterialTheme.typography.labelSmall, color = muted,
             )
-            if (item.status == MatchStatus.UPCOMING) {
+            if (item.status == MatchStatus.UPCOMING || item.status == MatchStatus.LIVE) {
                 Button(
                     onClick = onLoadApi, enabled = !state.api.loading,
                     colors = ButtonDefaults.buttonColors(containerColor = Accent.Green), modifier = Modifier.padding(top = 4.dp),
-                ) { Text(if (state.oneXBet is OneXBetState.Ok) "Refresh from 1xBet" else "Load 1xBet odds") }
+                ) { Text(when { item.status == MatchStatus.LIVE -> "Refresh live 1xBet odds"; state.oneXBet is OneXBetState.Ok -> "Refresh from 1xBet"; else -> "Load 1xBet odds" }) }
             }
         }
     }
