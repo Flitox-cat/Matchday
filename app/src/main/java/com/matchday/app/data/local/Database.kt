@@ -155,7 +155,8 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "matchday.db")
-                .fallbackToDestructiveMigration()
+                // No destructive fallback: user data (favourites, prediction history) must survive updates.
+                // Any future schema change needs an explicit Migration added here.
                 .build()
     }
 }

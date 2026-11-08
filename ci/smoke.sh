@@ -116,7 +116,27 @@ run_pass() {
   adb shell settings put system user_rotation 0; sleep 5; check "$label portrait"
 }
 
-adb install -r "$APK" || { echo "INSTALL FAILED"; exit 1; }
+# ---- Update test: install the currently published release, use it, then install this build over it ----
+if [ -s prev.apk ] && adb install -r prev.apk; then
+  echo "Previous release installed"
+  adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
+  adb shell am start -W -n $PKG/.MainActivity >/dev/null; sleep 30
+  adb shell am force-stop $PKG
+  if adb install -r "$APK" 2>&1 | tee upgrade.txt | grep -q Success; then
+    echo "UPGRADE OVER EXISTING APP: OK (no uninstall needed)"
+    adb shell svc wifi disable; adb shell svc data disable; adb shell cmd connectivity airplane-mode enable 2>/dev/null; sleep 3
+    adb shell am start -W -n $PKG/.MainActivity >/dev/null; sleep 15
+    check "after upgrade (offline, data kept)"; screen_texts
+    adb shell cmd connectivity airplane-mode disable 2>/dev/null; adb shell svc wifi enable; adb shell svc data enable; sleep 3
+  else
+    echo "UPGRADE OVER EXISTING APP: REFUSED ($(cat upgrade.txt | tail -1)) - previous release used another signing key"
+    adb uninstall $PKG >/dev/null
+    adb install -r "$APK" || { echo "INSTALL FAILED"; exit 1; }
+  fi
+else
+  echo "No previous release to upgrade from"
+  adb install -r "$APK" || { echo "INSTALL FAILED"; exit 1; }
+fi
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 adb logcat -c
 

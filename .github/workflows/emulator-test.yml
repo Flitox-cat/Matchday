@@ -27,6 +27,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+          curl -sL -o prev.apk "https://github.com/${{ github.repository }}/releases/download/latest/Matchday.apk" || true
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

@@ -14,12 +14,29 @@ android {
         applicationId = "com.matchday.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0.0"
+        // Always increases (minutes since 2025-03-01), so every new build installs over the previous one.
+        val code = (System.currentTimeMillis() / 60_000L - 29_000_000L).toInt()
+        versionCode = code
+        versionName = "3.0.$code"
+    }
+
+    // One permanent signing key for every build. Android only accepts an update signed with the
+    // same key as the installed app, so this must never change (see SIGNING.md).
+    signingConfigs {
+        create("matchday") {
+            storeFile = file("matchday-release.jks")
+            storePassword = "ftwhA335oUNyLJmX6sMIULpb"
+            keyAlias = "matchday"
+            keyPassword = "ftwhA335oUNyLJmX6sMIULpb"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("matchday")
+        }
         release {
+            signingConfig = signingConfigs.getByName("matchday")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
