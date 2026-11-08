@@ -1,41 +1,75 @@
-=== teams list eng.1
-{"team": {"abbreviation": "BOU", "alternateColor": "B57EDC", "color": "f42727", "displayName": "AFC Bournemouth", "id": "349", "isActive": true, "isAllStar": false, "location": "AFC Bournemouth", "name": "AFC Bournemouth", "nickname": "Bournemouth", "shortDisplayName": "Bournemouth", "slug": "eng.bournemouth", "uid": "s:600~t:349"}}
-count 20 ['AFC Bournemouth', 'Arsenal', 'Aston Villa'] [['abbreviation', 'alternateColor', 'color', 'displayName', 'id', 'isActive', 'isAllStar', 'links', 'location', 'logos', 'name', 'nickname', 'shortDisplayName', 'slug', 'uid']]
-=== search endpoint
-{"count": 5, "pageIndex": 1, "pageSize": 50, "pageCount": 1, "items": [{"id": "364", "uuid": "a47fbcec-c948-cf4c-9e41-3dfa37588c9c", "guid": "a47fbcec-c948-cf4c-9e41-3dfa37588c9c", "displayName": "Liverpool", "type": "team", "sport": "soccer", "league": "eng.1", "relevance": "26389811", "defaultLeagueSlug": "eng.1", "label": "Soccer Team", "uid": "s:600~t:364", "location": "Liverpool", "name": "Liverpool", "abbreviation": "LIV", "color": "d11317", "alternateColor": "FFFFFF", "includeSponsor": false, "showKey": false, "isLocked": false}, {"id": "19971", "uuid": "d1b424a5-a896-4975-5604-68d044356c02", "guid": "d1b424a5-a896-4975-5604-68d044356c02", "displayName": "Liverpool", "type": "team", "sport": "soccer", "league": "eng.w.1", "relevance": "5578", "defaultLeagueSlug": "eng.w.1", "label": "Soccer Team", "uid": "s:600~t:19971", "location": "Liverpool", "name": "Liverpool", "abbreviation": "LIV", "color": "dc0714", "alternateColor": "ffffff", "includeSponsor": false, "showKey": false, "isLocked": false}]}
-=== search v2
-{"totalFound": 4, "resultTypes": [{"totalFound": 5, "type": "player", "displayName": "Players"}, {"totalFound": 16, "type": "team", "displayName": "Teams"}], "results": [{"type": "player", "totalFound": 5, "page": 1, "limit": 5, "displayName": "Players", "contents": [{"id": "1eea7dad-61e3-3fe1-a33e-9e0f2cb458c9", "uid": "s:20~l:23~a:5096000", "guid": "1eea7dad-61e3-3fe1-a33e-9e0f2cb458c9", "type": "player", "displayName": "Akin Liverpool", "description": "NCAAF", "subtitle": "Florida Memorial Lions", "defaultLeagueSlug": "college-football", "sport": "football"}, {"id": "373fe5d0-204c-39a5-a6f6-e7e96f90656c", "uid": "s:20~l:23~a:5089256", "guid": "373fe5d0-204c-39a5-a6f6-e7e96f90656c", "type": "player", "displayName": "Jorel Liverpool", "description": "NCAAF", "subtitle": "Charlotte 49ers", "image": {"default": "https://a.espncdn.com/i/headshots/college-football/players/full/5089256.png", "defaultDark": "https://a.espncdn.com/i/headshots/college-football/players/full/5089256.png"}, "defaultLeagueSlug": "college-football", "sport": "football"}]}, {"type": "team", "totalFound": 5, "page": 1, "limit": 5, "displayName": "Teams", "contents": [{"id": "a47fbcec-c948-cf4c-9e41-3dfa37588c9c"
-=== Liverpool (364) schedule current
-events 9 keys ['timestamp', 'status', 'season', 'team', 'events', 'requestedSeason']
-states Counter({'post': 9})
-venue {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}}
-season {'year': 2026, 'displayName': '2026-27 English Premier League'} seasonType {'id': '1', 'type': 14308, 'name': '2026-27 English Premier League', 'abbreviation': '2026-27 English Premier League'}
-=== fixture=true param
-events 29
-2026-11-08T14:00Z pre Liverpool at Crystal Palace
-2026-11-22T16:30Z pre Manchester United at Liverpool
-2026-11-29T12:00Z pre Liverpool at Everton
-2026-12-02T19:30Z pre Sunderland at Liverpool
-=== past season 2023 eng.1
-events 38
-2024-05-19T15:00Z Wolverhampton Wanderers at Liverpool {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}} [('Liverpool', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671407/competitions/671407/competitors/364/scores/38?lang=en&region=us', 'value': 2.0, 'displayValue': '2', 'winner': True, 'source': {'id': '38', 'description': 'SA.ENVOY'}}), ('Wolverhampton Wanderers', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671407/competitions/671407/competitors/380/scores/38?lang=en&region=us', 'value': 0.0, 'displayValue': '0', 'winner': False, 'source': {'id': '38', 'description': 'SA.ENVOY'}})]
-2024-05-13T19:00Z Liverpool at Aston Villa {"fullName": "Villa Park", "address": {"city": "Birmingham", "country": "England"}} [('Aston Villa', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671391/competitions/671391/competitors/362/scores/38?lang=en&region=us', 'value': 3.0, 'displayValue': '3', 'winner': False, 'source': {'id': '38', 'description': 'SA.ENVOY'}}), ('Liverpool', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671391/competitions/671391/competitors/364/scores/38?lang=en&region=us', 'value': 3.0, 'displayValue': '3', 'winner': False, 'source': {'id': '38', 'description': 'SA.ENVOY'}})]
-2024-05-05T15:30Z Tottenham Hotspur at Liverpool {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}} [('Liverpool', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671387/competitions/671387/competitors/364/scores/38?lang=en&region=us', 'value': 4.0, 'displayValue': '4', 'winner': True, 'source': {'id': '38', 'description': 'SA.ENVOY'}}), ('Tottenham Hotspur', {'$ref': 'http://sports.core.api.espn.pvt/v2/sports/soccer/leagues/eng.1/events/671387/competitions/671387/competitors/367/scores/38?lang=en&region=us', 'value': 2.0, 'displayValue': '2', 'winner': False, 'source': {'id': '38', 'description': 'SA.ENVOY'}})]
-=== past season 2023 UCL
+=== esp.1 20261107
+events 4
+401882812 2026-11-07T13:00Z post True Málaga v Racing Santander
+401882813 2026-11-07T15:15Z post True Espanyol v Deportivo
+401882811 2026-11-07T17:30Z post True Osasuna v Athletic Club
+401882808 2026-11-07T20:00Z post True Valencia v Real Madrid
+=== esp.1 20261108
+events 5
+401882814 2026-11-08T13:00Z post True Elche v Real Betis
+401882810 2026-11-08T15:15Z post True Real Sociedad v Rayo Vallecano
+401882815 2026-11-08T17:30Z in False Celta Vigo v Levante
+401882807 2026-11-08T17:30Z in False Villarreal v Getafe
+401882816 2026-11-08T20:00Z pre False Atlético Madrid v Barcelona
+=== esp.1 20261109
 events 0
-=== past season 2022 UCL
-events 8
-2023-03-15T20:00Z Liverpool at Real Madrid {"fullName": "Estadio Bernab\u00e9u", "address": {"city": "Madrid", "country": "Spain"}}
-2023-02-21T20:00Z Real Madrid at Liverpool {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}}
-2022-11-01T20:00Z Napoli at Liverpool {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}}
-2022-10-26T19:00Z Liverpool at Ajax Amsterdam {"fullName": "Johan Cruijff Arena", "address": {"city": "Amsterdam", "country": "Netherlands"}}
-2022-10-12T19:00Z Liverpool at Rangers {"fullName": "Ibrox Stadium", "address": {"city": "Glasgow", "country": "Scotland"}}
-2022-10-04T19:00Z Rangers at Liverpool {"fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}}
-=== past season 2019 UCL
-events 8
-=== all comps schedule
-events 21
-=== core team venue (Fenerbahce 436?)
-[('9078', 'Alanyaspor'), ('132335', 'Amed SFK'), ('1895', 'Besiktas'), ('7656', 'Caykur Rizespor'), ('19267', 'Erzurum BB'), ('20729', 'Eyupspor'), ('436', 'Fenerbahce'), ('432', 'Galatasaray'), ('20070', 'Gaziantep FK'), ('996', 'Genclerbirligi'), ('789', 'Goztepe'), ('7914', 'Istanbul Basaksehir'), ('6870', 'Kasimpasa'), ('995', 'Kocaelispor'), ('7648', 'Konyaspor'), ('11429', 'Samsunspor'), ('997', 'Trabzonspor'), ('132334', 'Çorum FK')]
-=== core venue sample
-{"id": "192", "guid": "bea8423b-ce49-3202-95cb-0e2f21fa5ab9", "fullName": "Anfield", "address": {"city": "Liverpool", "country": "England"}}
+=== ita.1 20261107
+events 4
+401874791 2026-11-07T14:00Z post True Cagliari v Frosinone
+401874811 2026-11-07T14:00Z post True Torino v Lecce
+401874974 2026-11-07T17:00Z post True Parma v Bologna
+401874803 2026-11-07T19:45Z post True AS Roma v Sassuolo
+=== ita.1 20261108
+events 5
+401874810 2026-11-08T11:30Z post True Napoli v Lazio
+401875018 2026-11-08T14:00Z post True Genoa v AC Milan
+401874800 2026-11-08T14:00Z post True Monza v Atalanta
+401874808 2026-11-08T17:00Z in False Internazionale v Como
+401875003 2026-11-08T19:45Z pre False Fiorentina v Juventus
+=== ita.1 20261109
+events 0
+=== eng.1 20261107
+events 4
+401878758 2026-11-07T12:30Z post True Leeds United v Tottenham Hotspur
+401878760 2026-11-07T15:00Z post True Arsenal v Hull City
+401879241 2026-11-07T15:00Z post True Fulham v Newcastle United
+401878757 2026-11-07T17:30Z post True Nottingham Forest v Manchester City
+=== eng.1 20261108
+events 5
+401879244 2026-11-08T14:00Z post True Brighton & Hove Albion v Brentford
+401879243 2026-11-08T14:00Z post True Crystal Palace v Liverpool
+401878759 2026-11-08T14:00Z post True Ipswich Town v AFC Bournemouth
+401879239 2026-11-08T14:00Z post True Sunderland v Chelsea
+401879240 2026-11-08T16:30Z in False Manchester United v Aston Villa
+=== eng.1 20261109
+events 0
+=== fra.1 20261107
+events 2
+401876411 2026-11-07T18:00Z post True AJ Auxerre v Paris FC
+401876407 2026-11-07T20:05Z post True Paris Saint-Germain v Troyes
+=== fra.1 20261108
+events 6
+401876406 2026-11-08T14:00Z post True Stade Rennais v Lille
+401876412 2026-11-08T16:15Z in False Angers v Nice
+401876410 2026-11-08T16:15Z in False Brest v Lyon
+401876409 2026-11-08T16:15Z in False Le Havre AC v Lorient
+401876408 2026-11-08T16:15Z in False Le Mans v AS Monaco
+401876404 2026-11-08T19:45Z pre False Lens v Marseille
+=== fra.1 20261109
+events 0
+=== ger.1 20261107
+events 5
+401884745 2026-11-07T14:30Z post True Borussia Dortmund v SV Elversberg
+401884740 2026-11-07T14:30Z post True Mainz v Bayern Munich
+401884744 2026-11-07T14:30Z post True RB Leipzig v FC Augsburg
+401884737 2026-11-07T14:30Z post True SC Paderborn 07 v Eintracht Frankfurt
+401884743 2026-11-07T17:30Z post True VfB Stuttgart v Werder Bremen
+=== ger.1 20261108
+events 3
+401884738 2026-11-08T14:30Z post True FC Cologne v Bayer Leverkusen
+401884741 2026-11-08T16:30Z in False SC Freiburg v 1. FC Union Berlin
+401884742 2026-11-08T18:30Z pre False TSG Hoffenheim v Schalke 04
+=== ger.1 20261109
+events 0
+=== esp.1 default board
+[('2026-11-08T13:00Z', 'Real Betis at Elche'), ('2026-11-08T15:15Z', 'Rayo Vallecano at Real Sociedad'), ('2026-11-08T17:30Z', 'Levante at Celta Vigo'), ('2026-11-08T17:30Z', 'Getafe at Villarreal'), ('2026-11-08T20:00Z', 'Barcelona at Atlético Madrid')]
