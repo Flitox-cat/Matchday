@@ -36,6 +36,14 @@ jobs:
           name: matchday-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Publish quick APK (built, not yet emulator-tested) to quick-apk branch
+        if: success()
+        run: |
+          mkdir -p /tmp/q && cp app/build/outputs/apk/debug/app-debug.apk /tmp/q/Matchday.apk
+          cd /tmp/q && git init -q && git config user.name Matchday && git config user.email matchday@users.noreply.github.com
+          git add Matchday.apk && git commit -qm "${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:quick-apk
+
       - name: Publish build log (ci-build-log branch)
         if: always()
         run: |
