@@ -29,13 +29,17 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          curl -s -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/2026.csv" > /tmp/t.csv; wc -l /tmp/t.csv; head -1 /tmp/t.csv; tail -2 /tmp/t.csv
-          python3 -c "
-          import csv; r=list(csv.DictReader(open('/tmp/t.csv'))); print(len(r),'rows; last date',max(x.get('tourney_date','') for x in r)); print('with aces',sum(1 for x in r if x.get('w_ace')))"
-          curl -s -m 20 "https://api.github.com/repos/Tennismylife/TML-Database/commits?per_page=1" | head -c 300; echo
-          printf "stats site: "; curl -s -o /dev/null -w "%{http_code}\n" -m 20 https://stats.tennismylife.org/
-          curl -s -m 20 https://stats.tennismylife.org/robots.txt | head -8
-          printf "tennis-db robots: "; curl -s -m 20 https://tennis-db.com/robots.txt | head -10
+          for path in overview stats splits gamelog eventlog results bio; do
+            printf "== %s: " $path
+            curl -s --compressed -m 20 -A "Matchday-Android/2.0" "https://site.web.api.espn.com/apis/common/v3/sports/tennis/atp/athletes/3623/$path" | python3 -c "
+          import sys,json
+          try:
+              d=json.load(sys.stdin); print(list(d.keys())[:12]); print(json.dumps(d)[:700])
+          except Exception as e: print('ERR',e)"
+          done
+          printf "== core eventlog: "; curl -s --compressed -m 20 "https://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/athletes/3623/eventlog" | head -c 500; echo
+          printf "== core statistics: "; curl -s --compressed -m 20 "https://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/athletes/3623/statistics" | head -c 500; echo
+          printf "== core records: "; curl -s --compressed -m 20 "https://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/athletes/3623/records" | head -c 500; echo
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
