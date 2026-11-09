@@ -178,7 +178,12 @@ private fun SlipCard(slip: Slip, onMatch: (String) -> Unit) {
                 Text("Combined estimate ${if (slip.legs.isEmpty()) "N/A" else "${String.format("%.1f", slip.combinedProbability * 100)}%"} · each leg ${Math.round(slip.minProbability * 100)}%+",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            val (t, col) = when (slip.won) { true -> "✅ Won" to Accent.Green; false -> "❌ Lost" to Accent.Red; null -> "⏳ Pending" to Accent.Orange }
+            val (t, col) = when {
+                slip.legs.isEmpty() -> "No slip" to MaterialTheme.colorScheme.onSurfaceVariant
+                slip.won == true -> "✅ Won" to Accent.Green
+                slip.won == false -> "❌ Lost" to Accent.Red
+                else -> "⏳ Pending" to Accent.Orange
+            }
             Text(t, style = MaterialTheme.typography.labelLarge, color = col, fontWeight = FontWeight.Bold,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(col.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp))
         }
