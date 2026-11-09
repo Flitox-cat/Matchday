@@ -194,8 +194,16 @@ class MatchRepository(
                     if (ok) cache.touch(stamp)
                     ok
                 }
-            }.awaitAll().forEachIndexed { i, ok ->
-                if (ok) anyOk = true else messages += "${comps[i].title}: couldn't load (check your connection)."
+            }.awaitAll().let { results ->
+                val failed = comps.filterIndexed { i, _ -> !results[i] }
+                if (results.any { it }) anyOk = true
+                if (failed.isNotEmpty()) {
+                    messages += if (failed.size == comps.size)
+                        "Couldn't reach the free sports feed (check your connection). Saved matches are shown."
+                    else "${failed.size} of ${comps.size} competitions couldn't be updated this time (" +
+                        failed.take(3).joinToString { it.title } + (if (failed.size > 3) "…" else "") +
+                        "). Saved data is shown; they'll retry on the next refresh."
+                }
             }
         }
 
@@ -219,7 +227,10 @@ class MatchRepository(
         val boards: List<EScoreboard?> = if (comp.sport == SportType.TENNIS) {
             listOf(fetchBoard(comp, null))
         } else {
-            days.map { d -> async { fetchBoard(comp, d.format(YMD)) } }.awaitAll()
+            // One request for the whole date range (8x fewer requests); per-day only as a fallback.
+            val range = fetchBoard(comp, "${days.first().format(YMD)}-${days.last().format(YMD)}", limit = 1000)
+            if (range != null) listOf(range)
+            else days.map { d -> async { fetchBoard(comp, d.format(YMD)) } }.awaitAll()
         }
         val okBoards = boards.filterNotNull()
         if (okBoards.isEmpty()) return@coroutineScope false
@@ -258,14 +269,27 @@ class MatchRepository(
         true
     }
 
-    private suspend fun fetchBoard(comp: Competition, date: String?): EScoreboard? = gate.withPermit {
-        val raw = try {
-            espn.scoreboard(comp.espnSport, comp.espnLeague, date)
-        } catch (e: Exception) {
-            Log.w(TAG, "Scoreboard ${comp.key} $date unavailable: ${e.javaClass.simpleName}")
-            return@withPermit null
+    private suspend fun fetchBoard(comp: Competition, date: String?, limit: Int? = null): EScoreboard? {
+        // Two attempts: the free feed sometimes refuses bursts of requests or times out.
+        repeat(2) { attempt ->
+            val raw = gate.withPermit {
+                try {
+                    espn.scoreboard(comp.espnSport, comp.espnLeague, date, limit)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: retrofit2.HttpException) {
+                    // 4xx other than "too many requests": the feed has no board for this query - don't retry.
+                    if (e.code() in 400..499 && e.code() != 429) { Log.w(TAG, "Scoreboard ${comp.key} $date: HTTP ${e.code()}"); return null }
+                    null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Scoreboard ${comp.key} $date unavailable: ${e.javaClass.simpleName}")
+                    null
+                }
+            }
+            if (raw != null) return decodeBoard(comp, date, raw)
+            if (attempt == 0) kotlinx.coroutines.delay(1500)
         }
-        decodeBoard(comp, date, raw)
+        return null
     }
 
     /**

@@ -12,6 +12,7 @@ interface EspnService {
         @Path("sport") sport: String,
         @Path("league") league: String,
         @Query("dates") dates: String? = null,
+        @Query("limit") limit: Int? = null,
     ): kotlinx.serialization.json.JsonObject
 
     @GET("apis/site/v2/sports/{sport}/{league}/summary")
