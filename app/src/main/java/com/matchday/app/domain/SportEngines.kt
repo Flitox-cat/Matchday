@@ -417,7 +417,7 @@ object SportEngines {
         // dp[a][b] = probability of reaching score a-b
         val dp = Array(8) { DoubleArray(8) }
         dp[0][0] = 1.0
-        for (tot in 0..12) for (a in 0..min(tot, 7)) {
+        for (tot in 0..13) for (a in 0..min(tot, 7)) {   // 13 = 7-6 after a tie-break
             val bb = tot - a
             if (bb < 0 || bb > 7) continue
             val p = dp[a][bb]
