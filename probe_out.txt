@@ -1,8 +1,22 @@
-soccer/eng.1 dates=20261108-20261115 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-soccer/eng.1 dates=20261108-20261115&limit=300 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-soccer/eng.1 dates=20261108-20261115&limit=100 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-soccer/eng.1 dates=20261101-20261108&limit=300 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-basketball/nba dates=20261108-20261115 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-basketball/nba dates=20261108-20261115&limit=300 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-basketball/nba dates=20261108-20261115&limit=100 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
-basketball/nba dates=20261101-20261108&limit=300 ->  HTTP400 0 events [] {'code': 400, 'message': 'Failed to get events endpoint.'}
+soccer/esp.copa_del_rey 20261109 -> 0 events, 0 with odds; []
+soccer/esp.copa_del_rey 20261110 -> 6 events, 1 with odds; ['Alavés at Anaitasuna 2026-11-10T18:00Z', 'Eibar at CD Pamplona 2026-11-10T18:00Z', 'UD Logroñés at Amorebieta 2026-11-10T19:00Z', 'Real Jaen CF at Mijas Las Lagunas 2026-11-10T19:00Z']
+soccer/esp.copa_del_rey 20261111 -> 0 events, 0 with odds; []
+soccer/esp.copa_del_rey 20261112 -> 3 events, 0 with odds; ['Albacete at Calvo Sotelo 2026-11-12T17:30Z', 'Real Betis at CD Artistico Navalcarnero 2026-11-12T18:00Z', 'Levante at CD Tarancon 2026-11-12T18:00Z']
+soccer/ita.coppa_italia 20261109 -> 0 events, 0 with odds; []
+soccer/ita.coppa_italia 20261110 -> 0 events, 0 with odds; []
+soccer/ita.coppa_italia 20261111 -> 0 events, 0 with odds; []
+soccer/ita.coppa_italia 20261112 -> 0 events, 0 with odds; []
+soccer/eng.league_cup 20261109 -> 0 events, 0 with odds; []
+soccer/eng.league_cup 20261110 -> 0 events, 0 with odds; []
+soccer/eng.league_cup 20261111 -> 0 events, 0 with odds; []
+soccer/eng.league_cup 20261112 -> 0 events, 0 with odds; []
+basketball/nba 20261109 -> 8 events, 8 with odds; ['Los Angeles Lakers at Atlanta Hawks 2026-11-10T00:00Z', 'Cleveland Cavaliers at Charlotte Hornets 2026-11-10T00:00Z', 'Washington Wizards at Detroit Pistons 2026-11-10T00:00Z', 'Memphis Grizzlies at Toronto Raptors 2026-11-10T00:30Z']
+basketball/nba 20261110 -> 6 events, 1 with odds; ['Milwaukee Bucks at New York Knicks 2026-11-11T00:30Z', 'Boston Celtics at Philadelphia 76ers 2026-11-11T01:00Z', 'LA Clippers at Phoenix Suns 2026-11-11T02:00Z', 'Miami Heat at Utah Jazz 2026-11-11T02:00Z']
+basketball/nba 20261111 -> 10 events, 0 with odds; ['Washington Wizards at Indiana Pacers 2026-11-12T00:00Z', 'Cleveland Cavaliers at New York Knicks 2026-11-12T00:00Z', 'Boston Celtics at Toronto Raptors 2026-11-12T00:00Z', 'San Antonio Spurs at Chicago Bulls 2026-11-12T01:00Z']
+basketball/nba 20261112 -> 4 events, 0 with odds; ['Toronto Raptors at Philadelphia 76ers 2026-11-13T00:00Z', 'Detroit Pistons at Washington Wizards 2026-11-13T00:00Z', 'Dallas Mavericks at Minnesota Timberwolv 2026-11-13T01:00Z', 'Charlotte Hornets at Phoenix Suns 2026-11-13T02:00Z']
+hockey/nhl 20261109 -> 3 events, 3 with odds; ['New York Rangers at Edmonton Oilers 2026-11-10T01:00Z', 'Philadelphia Flyers at Vancouver Canucks 2026-11-10T02:30Z', 'New York Islanders at San Jose Sharks 2026-11-10T03:00Z']
+hockey/nhl 20261110 -> 7 events, 7 with odds; ['Colorado Avalanche at Toronto Maple Leaf 2026-11-11T00:00Z', 'Minnesota Wild at Montreal Canadiens 2026-11-11T00:00Z', 'Washington Capitals at Ottawa Senators 2026-11-11T00:00Z', 'New Jersey Devils at Winnipeg Jets 2026-11-11T00:00Z']
+hockey/nhl 20261111 -> 6 events, 0 with odds; ['Tampa Bay Lightning at Buffalo Sabres 2026-11-12T00:00Z', 'New York Rangers at Calgary Flames 2026-11-12T00:30Z', 'Philadelphia Flyers at Edmonton Oilers 2026-11-12T02:00Z', 'Utah Mammoth at Vegas Golden Knights 2026-11-12T02:30Z']
+hockey/nhl 20261112 -> 11 events, 0 with odds; ['Carolina Hurricanes at Seattle Kraken 2026-11-12T17:00Z', 'Montreal Canadiens at Boston Bruins 2026-11-13T00:00Z', 'Minnesota Wild at Toronto Maple Leafs 2026-11-13T00:00Z', 'Colorado Avalanche at Ottawa Senators 2026-11-13T00:00Z']
+atp pre matches 29 with odds 0 ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14']
+wta pre matches 55 with odds 0 ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']
