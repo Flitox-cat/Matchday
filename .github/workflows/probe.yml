@@ -29,27 +29,9 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for D in 20261103 20261027 20261020 20260915 20260601; do
-            printf "== atp %s: " $D
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard?dates=$D" > /tmp/b.json
-            python3 -c "
-          import json
-          d=json.load(open('/tmp/b.json')); ev=d.get('events',[])
-          print(len(ev),'events', [e.get('name') for e in ev])
-          for e in ev[:1]:
-              print('event keys',list(e.keys())); print('venue',json.dumps(e.get('venue'))[:200], 'major', e.get('major'))
-              n=0;post=0
-              for g in e.get('groupings',[]):
-                  for c in g.get('competitions',[]):
-                      n+=1
-                      if c.get('status',{}).get('type',{}).get('state')=='post': post+=1
-              print('comps',n,'post',post, 'groupings',[g.get('grouping',{}).get('displayName') for g in e.get('groupings',[])])
-              c=e['groupings'][0]['competitions'][-1]
-              print('comp keys',list(c.keys()))
-              print(json.dumps(c)[:1500])
-          "
-          done
-          for y in 2025 2026; do printf "TML $y: "; curl -s -o /dev/null -w "%{http_code} %{size_download}\n" -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/$y.csv"; done
+          curl -s -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/2025.csv" > /tmp/t25.csv
+          curl -s -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/2026.csv" > /tmp/t26.csv
+          python3 bt.py 2>&1 | tail -20
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
