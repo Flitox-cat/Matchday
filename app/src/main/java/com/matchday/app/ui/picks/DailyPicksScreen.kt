@@ -62,6 +62,7 @@ data class PicksUi(
     val selected: String = DailyPicksRepository.today(),
     val building: Boolean = false,
     val loaded: Boolean = false,
+    val error: String? = null,
 )
 
 class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
@@ -80,7 +81,7 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
     fun toggleSport(sp: PickSport?) {
         val cur = _state.value.sports
         val next = when {
-            sp == null -> if (cur.size == PickSport.values().size) setOf(PickSport.FOOTBALL) else PickSport.values().toSet()
+            sp == null -> PickSport.values().toSet()
             sp in cur -> (cur - sp).ifEmpty { cur }
             else -> cur + sp
         }
@@ -105,10 +106,11 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
             withContext(Dispatchers.IO) {
                 runCatching { c.dailyPicks.settle(c.matches.recentFinished()) }
                 runCatching { if (rebuild) c.dailyPicks.build(r, sp, force = true) else c.dailyPicks.todayOrBuild(r, sp) }
-            }
+            }.exceptionOrNull()?.let { e -> android.util.Log.w("DailyPicks", "build failed", e) }
+            val err = if (sp.isEmpty()) null else runCatching { withContext(Dispatchers.IO) { if (c.matches.observeMatchesOnce().isEmpty()) "No fixtures saved yet: open Home and pull to refresh, then come back." else null } }.getOrNull()
             val key = sp.map { it.name }.sorted()
             val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name && it.sports.sorted() == key }
-            _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true)
+            _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true, error = err)
         }
     }
 }
@@ -129,13 +131,13 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(PickSport.values().toList()) { sp ->
-                    FilterChip(selected = sp in st.sports, onClick = { vm.toggleSport(sp) }, enabled = !st.building,
-                        label = { Text("${sp.emoji} ${sp.label}") })
-                }
                 item {
                     FilterChip(selected = st.sports.size == PickSport.values().size, onClick = { vm.toggleSport(null) }, enabled = !st.building,
                         label = { Text("Select all") })
+                }
+                items(PickSport.values().toList()) { sp ->
+                    FilterChip(selected = sp in st.sports, onClick = { vm.toggleSport(sp) }, enabled = !st.building,
+                        label = { Text("${sp.emoji} ${sp.label}") })
                 }
             }
         }
@@ -161,7 +163,15 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         }
         if (day == null) {
             item {
-                if (st.loaded && !st.building) EmptyState("No picks for this day", "Slips are built automatically the first time you open this tab each day (Qatar time). Pull the latest fixtures on Home if the app has been offline.")
+                if (st.loaded && !st.building) when {
+                    st.sports.isEmpty() -> EmptyState("Choose a sport", "Pick at least one sport above to build the slips.")
+                    st.error != null -> EmptyState("No picks yet", st.error!!)
+                    st.selected != startToday -> EmptyState("No picks for this day", "No slips were saved for this date.")
+                    else -> Column(Modifier.padding(16.dp)) {
+                        EmptyState("Slips couldn't be built", "The free sports feed or the saved data wasn't readable just now. Tap Rebuild to try again.")
+                        OutlinedButton(onClick = { vm.load(rebuild = true) }) { Text("Rebuild") }
+                    }
+                }
             }
         } else {
             item {
@@ -169,7 +179,9 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                     Text("${st.range.label} · ${st.sports.joinToString(" ") { it.emoji }}: ${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
                     if (PickSport.TENNIS in st.sports) Text("Tennis: ranking and real odds only - surface records, head-to-head, recent form and fatigue aren't in the free feed, so they aren't used.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (st.range.startDay > 0 || st.range.days > 1) Text("Games further ahead often have no bookmaker odds published yet, so they can't be picked (no invented prices). Rebuild later for more.",
+                    if (st.range == PickRange.TOMORROW) Text("Tomorrow also includes today's matches that haven't started yet (Qatar time).",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (st.range.startDay > 0 || st.range.days > 1) Text("Games further ahead often have no bookmaker odds published yet. Those legs show the model prediction marked \"Odds unavailable\" (never an invented price); rebuild later for real prices.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Built ${Formats.dayTime(day.createdAt, zone)}. Odds are the real bookmaker prices at that time (1xBet when you've loaded them, otherwise the free feed's bookmaker, as labelled).",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -212,7 +224,7 @@ private fun SlipCard(slip: Slip, onMatch: (String) -> Unit) {
     InfoCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Total odds ${if (slip.legs.isEmpty()) "N/A" else String.format("%.2f", slip.totalOdds)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Total odds ${if (slip.legs.none { it.odds != null }) "Odds unavailable" else String.format("%.2f", slip.totalOdds) + if (slip.unpriced > 0) " (${slip.legs.size - slip.unpriced} priced legs)" else ""}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("Combined estimate ${if (slip.legs.isEmpty()) "N/A" else "${String.format("%.1f", slip.combinedProbability * 100)}%"} · each leg ${Math.round(slip.minProbability * 100)}%+",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -226,7 +238,6 @@ private fun SlipCard(slip: Slip, onMatch: (String) -> Unit) {
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(col.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp))
         }
         slip.note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Accent.Orange, modifier = Modifier.padding(top = 4.dp)) }
-        if (slip.legs.isEmpty()) Text("No match met this slip's reliability level today: no slip rather than a risky one.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
         slip.legs.forEachIndexed { i, leg ->
             if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 6.dp)) else Spacer(Modifier.height(8.dp))
             LegRow(leg, zone, onMatch)
@@ -255,7 +266,9 @@ private fun LegRow(leg: SlipLeg, zone: java.time.ZoneId, onMatch: (String) -> Un
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
             Text(leg.label, style = MaterialTheme.typography.titleSmall, color = Accent.Blue, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("@ ${String.format("%.2f", leg.odds)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Accent.Green)
+            val o = leg.odds
+            if (o != null) Text("@ ${String.format("%.2f", o)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Accent.Green)
+            else Text("Odds unavailable", style = MaterialTheme.typography.labelSmall, color = Accent.Orange)
             Spacer(Modifier.width(6.dp))
             Text("${Math.round(leg.probability * 100)}%", style = MaterialTheme.typography.labelMedium)
         }

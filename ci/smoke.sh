@@ -101,11 +101,9 @@ open_card() {
 picks_flow() {
   adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
   tap_text "Daily Picks"; sleep 40; check "$1 daily picks"; screen_texts
-  tap_text "Next 3 days"; sleep 90; check "$1 daily picks 3 days"; screen_texts
   tap_text "Select all"; sleep 120; check "$1 daily picks all sports"; screen_texts
-  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
-  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
-  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  tap_text "Tomorrow"; sleep 150; check "$1 daily picks tomorrow"; screen_texts
+  for i in 1 2 3 4 5 6 7 8; do adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts; done
 }
 
 # Open the first match in play and read its Live tab (stats, intelligence, live markets).
