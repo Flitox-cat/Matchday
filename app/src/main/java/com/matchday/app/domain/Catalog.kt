@@ -113,6 +113,7 @@ object Catalog {
         Competition("soccer/conmebol.america", "Copa América", SportType.FOOTBALL, 9, true, false, null),
         Competition("soccer/afc.asian.cup", "AFC Asian Cup", SportType.FOOTBALL, 8, true, false, null),
         Competition("soccer/caf.nations", "Africa Cup of Nations", SportType.FOOTBALL, 8, true, false, null),
+        Competition("soccer/caf.nations_qual", "Africa Cup of Nations Qualifying", SportType.FOOTBALL, 6, true, false, null),
         Competition("soccer/concacaf.gold", "Concacaf Gold Cup", SportType.FOOTBALL, 6, true, false, null),
         Competition("soccer/concacaf.nations.league", "Concacaf Nations League", SportType.FOOTBALL, 5, true, false, null),
         Competition("soccer/fifa.worldq.uefa", "World Cup Qualifying – Europe", SportType.FOOTBALL, 8, true, false, null),
@@ -142,10 +143,13 @@ object Catalog {
         "soccer/ksa.1", "soccer/afc.champions", "soccer/fifa.cwc", "soccer/uefa.super_cup", "soccer/esp.super_cup",
     )
 
+    /** Added in version 4 (switched on once for existing users too). */
+    val NEW_DEFAULTS_V4: Set<String> = setOf("soccer/caf.nations_qual")
+
     val DEFAULT_ENABLED: Set<String> = setOf(
         "soccer/uefa.champions", "soccer/eng.1", "soccer/esp.1", "soccer/uefa.europa",
         "soccer/ger.1", "soccer/ita.1", "soccer/fra.1", "basketball/nba", "tennis/atp", "tennis/wta", "hockey/nhl",
-    ) + NEW_DEFAULTS_V3
+    ) + NEW_DEFAULTS_V3 + NEW_DEFAULTS_V4
 
     fun find(key: String): Competition = ALL.firstOrNull { it.key == key }
         ?: Competition(key, key.substringAfter('/'), SportType.OTHER, 3, false, false, null)
