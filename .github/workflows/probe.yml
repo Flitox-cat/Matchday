@@ -29,9 +29,15 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          curl -s -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/2025.csv" > /tmp/t25.csv
-          curl -s -m 30 "https://raw.githubusercontent.com/Tennismylife/TML-Database/master/2026.csv" > /tmp/t26.csv
-          python3 bt.py 2>&1 | tail -20
+          for L in caf.nations_qual caf.nations.qual caf.nations_qualifying caf.nations; do
+            printf "%s: " $L
+            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/$L/scoreboard?dates=20261101-20261130" | python3 -c "
+          import sys,json
+          try:
+              d=json.load(sys.stdin); ev=d.get('events',[]); print(d.get('leagues',[{}])[0].get('name'), len(ev), [e['name'][:35]+' '+e['date'][:10] for e in ev[:6]])
+          except Exception as e: print('ERR',e)"
+          done
+          printf "standings: "; curl -s --compressed -m 25 "https://site.api.espn.com/apis/v2/sports/soccer/caf.nations_qual/standings" | head -c 300; echo
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
