@@ -111,6 +111,24 @@ class MatchRepository(
     private val footballData = FootballDataRepository(cache, settings)
     val tracker = PickTracker(cache)
 
+    /** Supplies tennis match odds (set by the app container; empty without an odds key). */
+    var tennisOddsProvider: (suspend () -> List<com.matchday.app.data.remote.OEvent>)? = null
+
+    /** Links a tennis fixture to its odds by player names and start time; prefers 1xBet, labels the real bookmaker. */
+    private fun attachTennisOdds(r: MatchEntity, evs: List<com.matchday.app.data.remote.OEvent>): MatchEntity {
+        val ev = evs.firstOrNull { e ->
+            kotlin.math.abs(EspnMapper.parseTime(e.commenceTime) - r.kickoff) <= 36 * HOUR &&
+                ((OneXBetRepository.samePlayer(e.homeTeam ?: "", r.homeTeam) && OneXBetRepository.samePlayer(e.awayTeam ?: "", r.awayTeam)) ||
+                    (OneXBetRepository.samePlayer(e.homeTeam ?: "", r.awayTeam) && OneXBetRepository.samePlayer(e.awayTeam ?: "", r.homeTeam)))
+        } ?: return r
+        val bm = ev.bookmakers.firstOrNull { it.key == "onexbet" } ?: ev.bookmakers.firstOrNull { it.key == "pinnacle" } ?: ev.bookmakers.firstOrNull() ?: return r
+        val outcomes = bm.markets.firstOrNull { it.key == "h2h" }?.outcomes ?: return r
+        val h = outcomes.firstOrNull { OneXBetRepository.samePlayer(it.name, r.homeTeam) }?.price ?: return r
+        val a = outcomes.firstOrNull { OneXBetRepository.samePlayer(it.name, r.awayTeam) }?.price ?: return r
+        val snap = OddsSnap(provider = bm.title.ifBlank { bm.key }, homeClose = h, awayClose = a, fetchedAt = EspnMapper.parseTime(bm.lastUpdate).takeIf { it > 0 } ?: System.currentTimeMillis())
+        return r.copy(oddsJson = Network.json.encodeToString(OddsSnap.serializer(), snap))
+    }
+
     /** Called with finished matches after each refresh (Daily Picks settles its slips). */
     var onFinished: (suspend (List<MatchEntity>) -> Unit)? = null
     private val apiFootball = ApiFootballRepository(cache, settings)
@@ -205,11 +223,13 @@ class MatchRepository(
         }
         val okBoards = boards.filterNotNull()
         if (okBoards.isEmpty()) return@coroutineScope false
-        val rows = okBoards.flatMap { b ->
+        var rows = okBoards.flatMap { b ->
             val logo = b.leagues.firstOrNull()?.logos?.firstOrNull()?.href
             b.events.flatMap { e -> EspnMapper.matches(comp, e, logo, now) }
         }.filter { comp.sport != SportType.TENNIS || it.kickoff >= now - 2 * DAY }
             .distinctBy { it.id }
+        val tennisOdds = if (comp.sport == SportType.TENNIS && rows.any { it.state == "pre" }) tennisOddsProvider?.invoke().orEmpty() else emptyList()
+        if (tennisOdds.isNotEmpty()) rows = rows.map { r -> if (r.state == "pre" && r.oddsJson == null) attachTennisOdds(r, tennisOdds) else r }
         if (rows.isNotEmpty()) db.matches().upsert(rows)
         if (rows.isEmpty() && okBoards.any { it.events.isNotEmpty() }) Log.w(TAG, "${comp.key}: events found but none could be listed")
         if (false) Log.i("MatchdayDiag", "load ${comp.key} days=${days.first()}..${days.last()} boards=${okBoards.size}/${boards.size} rows=${rows.size} " +

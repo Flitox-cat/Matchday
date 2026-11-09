@@ -81,6 +81,17 @@ interface OddsApiService {
     @GET("v4/sports")
     suspend fun sports(@Query("apiKey") apiKey: String): retrofit2.Response<List<OSport>>
 
+    /** Odds for every match of one sport/tournament in a single call (cost: 1 credit per market per region). */
+    @GET("v4/sports/{sport}/odds")
+    suspend fun sportOdds(
+        @Path("sport") sport: String,
+        @Query("apiKey") apiKey: String,
+        @Query("regions") regions: String = "eu",
+        @Query("markets") markets: String = "h2h",
+        @Query("oddsFormat") oddsFormat: String = "decimal",
+        @Query("dateFormat") dateFormat: String = "iso",
+    ): retrofit2.Response<List<OEvent>>
+
     /** Free: listing events does not use quota. */
     @GET("v4/sports/{sport}/events")
     suspend fun events(

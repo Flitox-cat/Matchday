@@ -97,6 +97,12 @@ fun MatchCard(item: MatchItem, onClick: () -> Unit, modifier: Modifier = Modifie
                     if (item.competition.hasDraw) OddsBox("X", o?.draw?.best?.price, Modifier.weight(1f), highlight = fav == "Draw")
                     OddsBox("2", o?.away?.best?.price, Modifier.weight(1f), highlight = fav == item.awayTeam)
                 }
+                if (o?.home?.best == null && o?.away?.best == null) {
+                    Text("Odds unavailable", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp))
+                } else if (item.competition.sport == com.matchday.app.domain.SportType.TENNIS) {
+                    o?.home?.best?.bookmaker?.let { Text("Odds: $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+                }
             }
 
             // Prediction strip (our estimate, visually distinct from bookmaker odds)

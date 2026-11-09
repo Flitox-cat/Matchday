@@ -142,6 +142,18 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
 
         fun sportKey(leagueKey: String): String? = SPORT[leagueKey]
 
+        /** Player names from different sources: "C. Alcaraz", "Alcaraz C.", "Carlos Alcaraz". */
+        fun samePlayer(a: String, b: String): Boolean {
+            if (TeamMatcher.same(a, b)) return true
+            fun parts(n: String) = TeamMatcher.normalize(n).split(' ').filter { it.isNotBlank() }
+            val pa = parts(a); val pb = parts(b)
+            if (pa.isEmpty() || pb.isEmpty()) return false
+            val longA = pa.filter { it.length > 1 }; val longB = pb.filter { it.length > 1 }
+            val surname = longA.lastOrNull { it in longB } ?: return false
+            val initA = pa.firstOrNull { it != surname }?.first(); val initB = pb.firstOrNull { it != surname }?.first()
+            return initA == null || initB == null || initA == initB
+        }
+
         /** Markets asked per sport: main call, then a best-effort call for extra markets. */
         fun marketsFor(sport: SportType): Pair<String, String> = when (sport) {
             SportType.FOOTBALL -> MARKETS to MARKETS_EXTRA
@@ -311,6 +323,44 @@ class OneXBetRepository(private val cache: JsonCache, private val settings: Sett
     }
 
     private class ApiProblem(msg: String) : Exception(msg)
+
+    /**
+     * Tennis match odds for the fixture list. ESPN publishes none, and SofaScore/FlashScore can't be
+     * read without bypassing their protections, so the only legitimate free source is The Odds API
+     * with the user's own key: ONE request per active ATP/WTA tournament returns every match's
+     * winner prices (1 credit), cached 12 h. Returns an empty list without a key or when paused.
+     */
+    suspend fun tennisMatchOdds(): List<OEvent> {
+        val s = settings.current()
+        if (s.oneXBetKey.isBlank() || System.currentTimeMillis() < s.oddsApiPausedUntil) return emptyList()
+        val key = s.oneXBetKey
+        return try {
+            val sports = cache.get("1x:sports", 6 * HOUR, sportsSer) {
+                val r = api.sports(key)
+                if (!r.isSuccessful) throw ApiProblem("sports ${r.code()}")
+                r.body().orEmpty()
+            }.filter { (it.key.startsWith("tennis_atp") || it.key.startsWith("tennis_wta")) && it.active }
+            sports.flatMap { sp ->
+                runCatching {
+                    cache.get("1x:tennisodds:${sp.key}", 12 * HOUR, events) {
+                        val r = api.sportOdds(sp.key, key)
+                        r.headers()["x-requests-remaining"]?.toDoubleOrNull()?.toInt()?.let { rem ->
+                            settings.setOddsApiRemaining(rem)
+                            if (rem <= 0) settings.setOddsApiPausedUntil(startOfNextMonth())
+                        }
+                        if (r.code() == 429) { settings.setOddsApiPausedUntil(startOfNextMonth()); throw ApiProblem("credits used up") }
+                        if (!r.isSuccessful) throw ApiProblem("odds ${r.code()}")
+                        r.body().orEmpty()
+                    }
+                }.getOrDefault(emptyList())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Tennis odds unavailable: ${e.message}")
+            emptyList()
+        }
+    }
 
     private val sportsSer = ListSerializer(com.matchday.app.data.remote.OSport.serializer())
 
