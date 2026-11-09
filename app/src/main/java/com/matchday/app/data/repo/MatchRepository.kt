@@ -110,6 +110,9 @@ class MatchRepository(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val footballData = FootballDataRepository(cache, settings)
     val tracker = PickTracker(cache)
+
+    /** Called with finished matches after each refresh (Daily Picks settles its slips). */
+    var onFinished: (suspend (List<MatchEntity>) -> Unit)? = null
     private val apiFootball = ApiFootballRepository(cache, settings)
     private val espn = Network.espn
     private val refreshMutex = Mutex()
@@ -179,7 +182,11 @@ class MatchRepository(
         }
 
         // Settle tracked recommendations before old matches are removed.
-        runCatching { tracker.settle(db.matches().since(now - 3 * DAY).filter { it.state == "post" }) }
+        runCatching {
+            val finished = db.matches().since(now - 3 * DAY).filter { it.state == "post" }
+            tracker.settle(finished)
+            onFinished?.invoke(finished)
+        }
         db.matches().deleteBefore(now - 2 * DAY)
         db.notified().deleteBefore(now - 7 * DAY)
         db.cache().deleteBefore(now - 30 * DAY)
@@ -325,6 +332,9 @@ class MatchRepository(
     /** Table already in memory or on disk (never hits the network). */
     suspend fun cachedTable(leagueKey: String): LeagueTable? = tables.value[leagueKey]
         ?: cache.peek("standings:$leagueKey", EStandings.serializer())?.let { EspnMapper.table(leagueKey, it, cache.ageMs("standings:$leagueKey")?.let { a -> System.currentTimeMillis() - a } ?: 0L) }
+
+    /** Finished matches still in the database (last 3 days). */
+    suspend fun recentFinished(): List<MatchEntity> = db.matches().since(System.currentTimeMillis() - 3 * DAY).filter { it.state == "post" }
 
     /** One-off snapshot of the match list. */
     suspend fun observeMatchesOnce(): List<MatchItem> = observeMatches().first()
@@ -563,6 +573,51 @@ class MatchRepository(
             Log.w(TAG, "Live stats unavailable for ${item.id}: ${ex.javaClass.simpleName}")
             null
         }
+    }
+
+    /** Analysis used by Daily Picks: table stats, last five, head-to-head, injuries, prediction, BTTS and markets. */
+    data class PickAnalysis(
+        val prediction: com.matchday.app.domain.Prediction?,
+        val markets: com.matchday.app.domain.MarketAnalysis?,
+        val homeStats: com.matchday.app.domain.TeamStats?,
+        val awayStats: com.matchday.app.domain.TeamStats?,
+        val h2h: List<com.matchday.app.domain.RecentResult>,
+        val injuries: InjuryInfo,
+        val homeRecent: List<com.matchday.app.domain.RecentResult>,
+        val awayRecent: List<com.matchday.app.domain.RecentResult>,
+    )
+
+    /** Same inputs as the match page (minus weather/profiles), using cached data where possible. Works offline from cache. */
+    suspend fun pickAnalysis(item: MatchItem, prices: List<com.matchday.app.data.repo.BookPrice>?, priceSource: String?): PickAnalysis? {
+        val comp = item.competition
+        if (comp.sport != SportType.FOOTBALL) return null
+        val entity = db.matches().byId(item.id) ?: return null
+        val table = if (comp.hasTable) tables.value[comp.key] ?: tableFor(comp.key) else null
+        var homeStats = EspnMapper.teamStats(table, entity.homeId, item.homeTeam, item.homeCrest, entity.homeForm)
+        var awayStats = EspnMapper.teamStats(table, entity.awayId, item.awayTeam, item.awayCrest, entity.awayForm)
+        val summary = safeCache("summary:${item.id}", 3 * HOUR, ESummary.serializer()) {
+            gate.withPermit { espn.summary(comp.espnSport, comp.espnLeague, entity.eventId) }
+        }?.value
+        var h2h = emptyList<com.matchday.app.domain.RecentResult>()
+        var injuries = InjuryInfo(false)
+        var hr = emptyList<com.matchday.app.domain.RecentResult>(); var ar = emptyList<com.matchday.app.domain.RecentResult>()
+        if (summary != null) {
+            hr = EspnMapper.lastFive(summary.lastFiveGames, entity.homeId, item.homeTeam)
+            ar = EspnMapper.lastFive(summary.lastFiveGames, entity.awayId, item.awayTeam)
+            if (hr.size >= 3) homeStats = homeStats?.copy(recent = hr)
+            if (ar.size >= 3) awayStats = awayStats?.copy(recent = ar)
+            h2h = EspnMapper.headToHead(summary.seasonseries, entity.homeId, item.homeTeam)
+            injuries = injuriesOf(summary, item, entity.homeId, entity.awayId)
+        }
+        val inputs = if (homeStats != null && awayStats != null) ModelInputs(homeStats, awayStats, table?.averages, injuries) else null
+        val prediction = PredictionEngine.predict(comp, item.homeTeam, item.awayTeam, item.odds, inputs) ?: item.prediction
+        val btts = BttsEngine.analyze(item.homeTeam, item.awayTeam, prediction, hr, ar, h2h, injuries)
+        val lh = prediction?.expectedHome; val la = prediction?.expectedAway
+        val markets = if (lh != null && la != null) com.matchday.app.domain.MarketEngine.analyze(
+            item.homeTeam, item.awayTeam, lh, la, prediction, btts, emptyList(), emptyList(), h2h, emptyList(), injuries,
+            prices, priceSource, com.matchday.app.ui.detail.feedPrices(item.odds), item.odds?.home?.best?.bookmaker, false,
+        ) else null
+        return PickAnalysis(prediction, markets, homeStats, awayStats, h2h, injuries, hr, ar)
     }
 
     fun loadDetail(item: MatchItem): Flow<DetailExtras> = flow {

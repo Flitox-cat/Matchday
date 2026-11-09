@@ -97,6 +97,14 @@ open_card() {
   dump; grep -q '"Overview"' ui.xml && echo "match page opened" || echo "MATCH PAGE NOT OPENED"
 }
 
+# Daily Picks tab: build today's slips and read them.
+picks_flow() {
+  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
+  tap_text "Daily Picks"; sleep 40; check "$1 daily picks"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
+}
+
 # Open the first match in play and read its Live tab (stats, intelligence, live markets).
 live_flow() {
   adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
@@ -145,6 +153,7 @@ run_pass() {
   adb shell input swipe 500 1500 500 700 300; sleep 2; screen_texts
   adb shell input keyevent 4; sleep 4; check "$label back to list"
   search_flow "$label"
+  picks_flow "$label"
   live_flow "$label"
   sport_flow "$label" "Basketball"
   sport_flow "$label" "Tennis"

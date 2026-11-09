@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -57,6 +58,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val tabs = listOf(
     Tab("home", "Home", Icons.Filled.Home),
+    Tab("picks", "Daily Picks", Icons.Filled.Receipt),
     Tab("predictions", "Predictions", Icons.Filled.Insights),
     Tab("live", "Live", Icons.Filled.LiveTv),
     Tab("favourites", "Favourites", Icons.Filled.Star),
@@ -91,7 +93,7 @@ fun AppRoot(settings: AppSettings) {
                                 selected = route == t.route,
                                 onClick = { goTab(t.route) },
                                 icon = { Icon(t.icon, contentDescription = t.label) },
-                                label = { Text(t.label, style = MaterialTheme.typography.labelSmall) },
+                                label = { Text(t.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = Accent.Blue,
                                     selectedTextColor = Accent.Blue,
@@ -108,6 +110,10 @@ fun AppRoot(settings: AppSettings) {
                     composable("home") {
                         val vm: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(container) } })
                         HomeScreen(vm, onMatch = openMatch, onSettings = { goTab("settings") }, onTeam = openTeam)
+                    }
+                    composable("picks") {
+                        val vm: com.matchday.app.ui.picks.DailyPicksViewModel = viewModel(factory = viewModelFactory { initializer { com.matchday.app.ui.picks.DailyPicksViewModel(container) } })
+                        com.matchday.app.ui.picks.DailyPicksScreen(vm, onMatch = openMatch)
                     }
                     composable("predictions") {
                         val vm: PredictionsViewModel = viewModel(factory = viewModelFactory { initializer { PredictionsViewModel(container) } })

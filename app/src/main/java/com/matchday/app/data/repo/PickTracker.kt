@@ -133,11 +133,12 @@ class PickTracker(private val cache: JsonCache) {
         }
     }
 
-    private enum class Outcome { WIN, LOSS, VOID, UNKNOWN }
+    enum class Outcome { WIN, LOSS, VOID, UNKNOWN }
 
     private fun b(x: Boolean) = if (x) Outcome.WIN else Outcome.LOSS
 
-    private fun outcome(m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?): Outcome = when (m) {
+    /** Result of one selection from the final (and half-time) score. */
+    fun outcome(m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?): Outcome = when (m) {
         "1X2" -> b(when (sel) { "HOME" -> hg > ag; "AWAY" -> ag > hg; else -> hg == ag })
         "DC" -> b(when (sel) { "1X" -> hg >= ag; "X2" -> ag >= hg; else -> hg != ag })
         "DNB" -> if (hg == ag) Outcome.VOID else b(if (sel == "DNB_HOME") hg > ag else ag > hg)
