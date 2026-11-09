@@ -1,98 +1,36 @@
-esp.copa_del_rey OK 'Spanish Copa del Rey' 6
-esp.super_cup OK 'Spanish Supercopa' 1
-esp.2 OK 'Spanish LALIGA 2' 3
-eng.fa OK 'English FA Cup' 4
-eng.league_cup OK 'English Carabao Cup' 1
-eng.3 OK 'English League One' 1
-eng.4 OK 'English League Two' 1
-eng.5 OK 'English National League' 1
-ita.coppa_italia OK 'Coppa Italia' 1
-ita.super_cup OK 'Italian Supercoppa' 1
-ita.2 OK 'Italian Serie B' 3
-ger.dfb_pokal OK 'German Cup' 8
-ger.2 OK 'German 2. Bundesliga' 3
-ger.super_cup OK 'German Supercup' 1
-fra.coupe_de_france OK 'Coupe de France' 1
-fra.2 OK 'French Ligue 2' 3
-fra.super_cup OK 'French Trophee des Champions' 1
-por.taca.portugal OK 'Taca de Portugal' 1
-por.2 OK None 0
-ned.knvb_beker OK None 0
-ned.2 OK 'Dutch Keuken Kampioen Divisie' 2
-sco.1 OK 'Scottish Premiership' 2
-sco.tennents OK 'Scottish Cup' 4
-sco.cis OK 'Scottish League Cup' 1
-bel.1 OK 'Belgian Pro League' 4
-tur.1 OK 'Turkish Super Lig' 4
-tur.cup OK None 0
-gre.1 OK 'Greek Super League' 5
-aut.1 OK 'Austrian Bundesliga' 3
-sui.1 OK 'Swiss Super League' 3
-den.1 OK 'Danish Superliga' 4
-nor.1 OK 'Norwegian Eliteserien' 6
-swe.1 OK 'Swedish Allsvenskan' 5
-rus.1 OK 'Russian Premier League' 4
-ukr.1 OK None 0
-pol.1 OK None 0
-cze.1 OK 'Gambrinus Liga' 0
-cyp.1 OK 'Cypriot First Division' 3
-isr.1 OK 'Israeli Premier League' 3
-rou.1 OK 'Romanian Liga 1' 2
-srb.1 OK None 0
-cro.1 OK None 0
-irl.1 OK 'Irish Premier Division' 5
-bra.1 OK 'Brazilian Serie A' 1
-bra.2 OK 'Brazilian Serie B' 3
-bra.copa_do_brazil OK 'Copa do Brasil' 1
-arg.1 OK 'Argentine Liga Profesional de Fútbol' 1
-arg.copa OK 'Copa Argentina' 1
-mex.1 OK 'Mexican Liga BBVA MX' 2
-col.1 OK 'Colombian Primera A' 15
-chi.1 OK 'Chilean Primera División' 6
-uru.1 OK 'Liga AUF Uruguaya' 1
-per.1 OK 'Peruvian Liga 1' 4
-ecu.1 OK 'LigaPro Ecuador' 4
-par.1 OK 'Paraguayan Primera División' 2
-ven.1 OK 'Venezuelan Primera División' 2
-bol.1 OK 'Bolivian Liga Profesional' 3
-jpn.1 OK 'Japanese J.League' 4
-kor.1 OK None 0
-chn.1 OK 'Chinese Super League' 8
-aus.1 OK 'Australian A-League Men' 1
-ind.1 OK 'Indian Super League' 2
-tha.1 OK 'Thai League 1' 3
-uae.1 OK None 0
-qat.1 OK None 0
-ksa.kings.cup OK "Saudi King's Cup" 4
-egy.1 OK None 0
-mar.1 OK None 0
-rsa.1 OK 'South African Premiership' 7
-nga.1 OK 'Nigerian Professional League' 10
-usa.open OK 'U.S. Open Cup' 1
-concacaf.champions OK 'Concacaf Champions Cup' 1
-concacaf.gold OK 'Concacaf Gold Cup' 1
-concacaf.nations.league OK 'Concacaf Nations League' 6
-conmebol.libertadores OK 'CONMEBOL Libertadores' 1
-conmebol.sudamericana OK 'CONMEBOL Sudamericana' 1
-conmebol.america OK 'Copa América' 1
-afc.champions OK 'AFC Champions League Elite' 2
-afc.asian.cup OK 'AFC Asian Cup' 1
-caf.champions OK 'CAF Champions League' 6
-caf.nations OK 'Africa Cup of Nations' 1
-uefa.nations OK 'UEFA Nations League' 8
-uefa.euro OK 'UEFA European Championship' 1
-uefa.super_cup OK 'UEFA Super Cup' 1
-uefa.euroq OK 'UEFA European Championship Qualifying' 3
-fifa.worldq.uefa OK 'FIFA World Cup Qualifying - UEFA' 4
-fifa.worldq.conmebol OK 'FIFA World Cup Qualifying - CONMEBOL' 5
-fifa.worldq.afc OK 'FIFA World Cup Qualifying - AFC' 1
-fifa.worldq.caf OK 'FIFA World Cup Qualifying - CAF' 1
-fifa.worldq.concacaf OK 'FIFA World Cup Qualifying - Concacaf' 6
-fifa.friendly OK 'International Friendly' 1
-fifa.cwc OK 'FIFA Club World Cup' 1
-fifa.intercontinental_cup OK 'FIFA Intercontinental Cup' 1
-club.friendly OK 'Club Friendly' 2
-basketball/wnba OK "Women's National Basketball Association" 1
-basketball/mens-college-basketball OK "NCAA Men's Basketball" 4
-basketball/womens-college-basketball OK "NCAA Women's Basketball" 12
-hockey/mens-college-hockey OK "NCAA Men's Ice Hockey" 1
+atp 148-2026 186537 ['Borna Gojo', 'Tomas Machac'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+atp 148-2026 186536 ['Ugo Humbert', 'Adolfo Daniel Vallejo'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+atp 148-2026 186530 ['Max Dahlin', 'Tomas Martin Etcheverry'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+wta 382-2026 187381 ['Karolina Muchova', 'Aryna Sabalenka'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+wta 382-2026 187382 ['Elina Svitolina', 'Mirra Andreeva'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+wta 382-2026 187372 ['Jessica Pegula', 'Marta Kostyuk'] odds in scoreboard: False
+  core odds: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
+=== sofascore robots
+{"error": {"code": 403, "reason": "Forbidden" }}=== sofascore api status
+403
+=== flashscore robots
+Sitemap: https://www.flashscore.com/sitemap.xml
+
+User-agent: *
+Disallow: /standings/
+Disallow: /draw/
+Disallow: /newsfeed/
+Disallow: /live/
+Disallow: /my/
+Disallow: /finished/
+Disallow: /scheduled/
+Disallow: /watch/yesterday/
+Disallow: /tennis/live/
+Disallow: /tennis/my/
+Disallow: /tennis/finished/
+Disallow: /tennis/scheduled/
+Disallow: /tennis/watch/yesterday/
+Disallow: /basketball/live/
+Disallow: /basketball/my/
+Disallow: /basketball/finished/
+Disallow: /basketball/scheduled/
