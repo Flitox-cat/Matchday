@@ -29,16 +29,27 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in soccer/eng.1 basketball/nba; do
-            for Q in "dates=20261108-20261115" "dates=20261108-20261115&limit=300" "dates=20261108-20261115&limit=100" "dates=20261101-20261108&limit=300"; do
-              printf "%s %s -> " "$L" "$Q"
-              curl -s --compressed -m 25 -A "Matchday-Android/2.0" -w " HTTP%{http_code}" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?$Q" | python3 -c "
+          for L in soccer/esp.copa_del_rey soccer/ita.coppa_italia soccer/eng.league_cup basketball/nba hockey/nhl; do
+            for D in 20261109 20261110 20261111 20261112; do
+              printf "%s %s -> " "$L" "$D"
+              curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?dates=$D" | python3 -c "
           import sys,json
-          raw=sys.stdin.read(); code=raw[raw.rfind(' HTTP'):]; body=raw[:raw.rfind(' HTTP')]
-          try:
-              d=json.loads(body); ev=d.get('events',[]); print(code, len(ev), 'events', sorted({e['date'][:10] for e in ev})[:9], str(d)[:150] if not ev else '')
-          except Exception as e: print(code, 'not json', body[:200])"
+          d=json.load(sys.stdin); ev=d.get('events',[])
+          wo=sum(1 for e in ev if any(o for o in (e['competitions'][0].get('odds') or []) if o))
+          print(len(ev),'events,',wo,'with odds;', [e['name'][:40]+' '+e['date'] for e in ev[:4]])"
             done
+          done
+          for T in atp wta; do
+            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/tennis/$T/scoreboard" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin); n=0; wo=0; dates=set()
+          for e in d.get('events',[]):
+              for g in e.get('groupings',[]):
+                  for c in g.get('competitions',[]):
+                      if c.get('status',{}).get('type',{}).get('state')=='pre':
+                          n+=1; dates.add(c.get('date','')[:10])
+                          if any(o for o in (c.get('odds') or []) if o): wo+=1
+          print('$T pre matches',n,'with odds',wo,sorted(dates))"
           done
           } > probe_out.txt 2>&1
           cat probe_out.txt
