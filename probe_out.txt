@@ -1,24 +1,17 @@
-137 /tmp/t.csv
-tourney_id,tourney_name,surface,draw_size,tourney_level,indoor,tourney_date,match_num,winner_id,winner_seed,winner_entry,winner_name,winner_hand,winner_ht,winner_ioc,winner_age,winner_rank,winner_rank_points,loser_id,loser_seed,loser_entry,loser_name,loser_hand,loser_ht,loser_ioc,loser_age,loser_rank,loser_rank_points,score,best_of,round,minutes,w_ace,w_df,w_svpt,w_1stIn,w_1stWon,w_2ndWon,w_SvGms,w_bpSaved,w_bpFaced,l_ace,l_df,l_svpt,l_1stIn,l_1stWon,l_2ndWon,l_SvGms,l_bpSaved,l_bpFaced
-2026-301,Auckland,Hard,32,250,O,20260117,27,M0NI,3,,Jakub Mensik,R,196,CZE,20.378,18,2125,B0BI,7,,Sebastian Baez,R,170,ARG,25.054,39,1250,6-3 7-6(7),3,F,82,18,3,67,41,39,9,11,1,2,2,3,65,52,35,6,10,3,5
-2026-8998,Adelaide,Hard,28,250,O,20260117,27,M0FH,8,,Tomas Machac,R,183,CZE,25.262,35,1360,HH26,,,Ugo Humbert,L,188,FRA,27.562,36,1355,6-4 6-7(2) 6-2,3,F,143,5,1,98,67,49,18,15,3,4,8,3,97,60,45,15,15,8,12137 rows; last date 20260117
-with aces 137
-[
-  {
-    "sha": "9aecc242e98b41fb6a69ecfc188a58ebb4cf2f6f",
-    "node_id": "C_kwDODjd2f9oAKDlhZWNjMjQyZTk4YjQxZmI2YTY5ZWNmYzE4OGE1OGViYjRjZjJmNmY",
-    "commit": {
-      "author": {
-        "name": "Tennismylife",
-        "email": "49320517+Tennismylife@users.noreply.github.com",
-        "date": "2
-stats site: 200
-User-agent: *
-Allow: /
-
-# I crawler possono visitare le pagine dei giocatori, ma non le combinazioni
-# di filtri espresse nella query string, incluse quelle di /matches.
-Disallow: /players/*?
-Disallow: /players/*/matches?*
-
-tennis-db robots: {"detail":"Server is busy. Please retry shortly."}
+== overview: ['statistics', 'news', 'nextGame', 'gameLog']
+{"statistics": {}, "news": [{"headline": "Jannik Sinner replacing Darren Cahill with Magnus Norman on coaching team", "lastModified": "2026-11-06T11:11:30.000+00:00", "root": "tennis", "premium": false, "links": {"api": {"self": {"href": "https://content.core.api.espn.com/v1/sports/news/50398236"}}, "mobile": {"href": "http://m.espn.go.com/general/tennis/story?storyId=50398236"}, "web": {"href": "https://www.espn.com/tennis/story/_/id/50398236/sinner-replacing-cahill-norman-coaching-team"}}, "type": "HeadlineNews", "section": "Tennis", "id": 50398236, "linkText": "Sinner replacing Cahill with Norman on coaching team", "categorized": "2026-11-06T11:11:30Z", "description": "Jannik Sinner's par
+== stats: ['code', 'message']
+{"code": 404, "message": "Statistics not found"}
+== splits: ['code', 'message']
+{"code": 404, "message": "Statistics not found"}
+== gamelog: ['filters']
+{"filters": [{"displayName": "League", "name": "league", "value": "atp", "options": [{"value": "atp", "displayValue": "ATP", "shortDisplayName": "ATP"}, {"value": "wta", "displayValue": "WTA", "shortDisplayName": "WTA"}]}]}
+== eventlog: ['athlete', 'season', 'league', 'news', 'playerSwitcher']
+{"athlete": {}, "season": {"year": 2026, "startDate": "2026-01-01T08:00:00.000+00:00", "endDate": "2027-01-01T07:59:00.000+00:00", "type": {"id": "2", "type": 2, "name": "Regular Season", "abbreviation": "reg", "slug": "regular-season", "startDate": "2026-01-01T08:00:00.000+00:00", "endDate": "2027-01-01T07:59:00.000+00:00", "hasGroups": false, "hasStandings": false, "hasLegs": false, "year": 2026}, "types": {"count": 1, "pageIndex": 1, "pageSize": 1, "pageCount": 1, "items": [{"id": "2", "type": 2, "name": "Regular Season", "abbreviation": "reg", "slug": "regular-season", "startDate": "2026-01-01T08:00:00.000+00:00", "endDate": "2027-01-01T07:59:00.000+00:00", "hasGroups": false, "hasStandi
+== results: ['code', 'message']
+{"code": 404, "message": "http://sports.core.api.espn.pvt/v2/sports/tennis/leagues/atp/athletes/{id}/results: 404"}
+== bio: []
+{}
+== core eventlog: {"$ref":"http://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/seasons/2026/athletes/3623/eventlog?lang=en&region=us","events":{"count":55,"pageIndex":1,"pageSize":25,"pageCount":3,"items":[{"event":{"$ref":"http://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/events/188-2026?lang=en&region=us"},"competition":{"$ref":"http://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/events/188-2026/competitions/177323?lang=en&region=us"},"competitor":{"$ref":"http://sports.core.api.esp
+== core statistics: {"$ref":"http://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/athletes/3623/statistics/0?lang=en&region=us","athlete":{"$ref":"http://sports.core.api.espn.com/v2/sports/tennis/leagues/atp/athletes/3623?lang=en&region=us"},"splits":{"id":"0","name":"All Splits","abbreviation":"TOT","type":"total","categories":[{"name":"general","displayName":"General","shortDisplayName":"General","abbreviation":"gen","summary":"","stats":[{"name":"singlesWon","displayName":"Singles Won","shortDisplayName"
+== core records: {"count":0,"pageIndex":0,"pageSize":25,"pageCount":0,"items":[]}
