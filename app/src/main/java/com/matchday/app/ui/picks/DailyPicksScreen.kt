@@ -40,6 +40,7 @@ import com.matchday.app.AppContainer
 import com.matchday.app.data.repo.DailyPicksRepository
 import com.matchday.app.data.repo.DailySlips
 import com.matchday.app.data.repo.PickRange
+import com.matchday.app.data.repo.PickSport
 import com.matchday.app.data.repo.Slip
 import com.matchday.app.data.repo.SlipLeg
 import com.matchday.app.ui.Formats
@@ -56,6 +57,7 @@ import kotlinx.coroutines.withContext
 
 data class PicksUi(
     val range: PickRange = PickRange.TODAY,
+    val sports: Set<PickSport> = setOf(PickSport.FOOTBALL),
     val days: List<DailySlips> = emptyList(),
     val selected: String = DailyPicksRepository.today(),
     val building: Boolean = false,
@@ -66,7 +68,27 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(PicksUi())
     val state: StateFlow<PicksUi> = _state
 
-    init { load(rebuild = false) }
+    init {
+        viewModelScope.launch {
+            val saved = runCatching { c.settings.current().pickSports }.getOrDefault(setOf("FOOTBALL"))
+            _state.value = _state.value.copy(sports = saved.mapNotNull { n -> PickSport.values().firstOrNull { it.name == n } }.toSet().ifEmpty { setOf(PickSport.FOOTBALL) })
+            load(rebuild = false)
+        }
+    }
+
+    /** Multi-select; the choice is remembered. */
+    fun toggleSport(sp: PickSport?) {
+        val cur = _state.value.sports
+        val next = when {
+            sp == null -> if (cur.size == PickSport.values().size) setOf(PickSport.FOOTBALL) else PickSport.values().toSet()
+            sp in cur -> (cur - sp).ifEmpty { cur }
+            else -> cur + sp
+        }
+        if (next == cur) return
+        _state.value = _state.value.copy(sports = next)
+        viewModelScope.launch { runCatching { c.settings.setPickSports(next.map { it.name }.toSet()) } }
+        load(rebuild = false)
+    }
 
     fun select(d: String) { _state.value = _state.value.copy(selected = d) }
 
@@ -77,13 +99,15 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
 
     fun load(rebuild: Boolean) {
         val r = _state.value.range
+        val sp = _state.value.sports
         viewModelScope.launch {
             _state.value = _state.value.copy(building = true)
             withContext(Dispatchers.IO) {
                 runCatching { c.dailyPicks.settle(c.matches.recentFinished()) }
-                runCatching { if (rebuild) c.dailyPicks.build(r, force = true) else c.dailyPicks.todayOrBuild(r) }
+                runCatching { if (rebuild) c.dailyPicks.build(r, sp, force = true) else c.dailyPicks.todayOrBuild(r, sp) }
             }
-            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name }
+            val key = sp.map { it.name }.sorted()
+            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name && it.sports.sorted() == key }
             _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true)
         }
     }
@@ -99,8 +123,20 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("Daily Picks", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Three accumulators a day: 5, 10 and 20 matches. Each match is analysed first; risky ones are left out.",
+                Text("Three accumulators a day (5, 10 and 20 matches) from the sports you choose. Each match is analysed first; risky ones are left out.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(PickSport.values().toList()) { sp ->
+                    FilterChip(selected = sp in st.sports, onClick = { vm.toggleSport(sp) }, enabled = !st.building,
+                        label = { Text("${sp.emoji} ${sp.label}") })
+                }
+                item {
+                    FilterChip(selected = st.sports.size == PickSport.values().size, onClick = { vm.toggleSport(null) }, enabled = !st.building,
+                        label = { Text("Select all") })
+                }
             }
         }
         item {
@@ -130,7 +166,9 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         } else {
             item {
                 InfoCard {
-                    Text("${st.range.label}: ${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
+                    Text("${st.range.label} · ${st.sports.joinToString(" ") { it.emoji }}: ${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
+                    if (PickSport.TENNIS in st.sports) Text("Tennis: ranking and real odds only - surface records, head-to-head, recent form and fatigue aren't in the free feed, so they aren't used.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (st.range.startDay > 0 || st.range.days > 1) Text("Games further ahead often have no bookmaker odds published yet, so they can't be picked (no invented prices). Rebuild later for more.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Built ${Formats.dayTime(day.createdAt, zone)}. Odds are the real bookmaker prices at that time (1xBet when you've loaded them, otherwise the free feed's bookmaker, as labelled).",
@@ -201,7 +239,7 @@ private fun LegRow(leg: SlipLeg, zone: java.time.ZoneId, onMatch: (String) -> Un
     Column(Modifier.fillMaxWidth().clickable { onMatch(leg.matchId) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("${leg.home} vs ${leg.away}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${PickSport.emojiOf(leg.sport)} ${leg.home} vs ${leg.away}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${leg.competition} · ${Formats.kickoffLabel(leg.kickoff, zone)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val (icon, col) = when {

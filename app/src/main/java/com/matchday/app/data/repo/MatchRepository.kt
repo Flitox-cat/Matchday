@@ -587,6 +587,16 @@ class MatchRepository(
         val awayRecent: List<com.matchday.app.domain.RecentResult>,
     )
 
+    /** Head-to-head and injuries from the (cached) match summary - any sport. */
+    suspend fun summaryBasics(item: MatchItem): Pair<List<com.matchday.app.domain.RecentResult>, InjuryInfo> {
+        val entity = db.matches().byId(item.id) ?: return emptyList<com.matchday.app.domain.RecentResult>() to InjuryInfo(false)
+        val comp = item.competition
+        val summary = safeCache("summary:${item.id}", 3 * HOUR, ESummary.serializer()) {
+            gate.withPermit { espn.summary(comp.espnSport, comp.espnLeague, entity.eventId) }
+        }?.value ?: return emptyList<com.matchday.app.domain.RecentResult>() to InjuryInfo(false)
+        return EspnMapper.headToHead(summary.seasonseries, entity.homeId, item.homeTeam) to injuriesOf(summary, item, entity.homeId, entity.awayId)
+    }
+
     /** Same inputs as the match page (minus weather/profiles), using cached data where possible. Works offline from cache. */
     suspend fun pickAnalysis(item: MatchItem, prices: List<com.matchday.app.data.repo.BookPrice>?, priceSource: String?): PickAnalysis? {
         val comp = item.competition
