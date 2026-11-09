@@ -29,31 +29,17 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for T in atp wta; do
-            g "https://site.api.espn.com/apis/site/v2/sports/tennis/$T/scoreboard" > sb_$T.json
-            python3 - "$T" <<'PY2'
-          import json, sys, subprocess
-          t = sys.argv[1]
-          d = json.load(open('sb_%s.json' % t))
-          n = 0
-          for e in d.get('events', []):
-              for g in e.get('groupings', []):
-                  for c in g.get('competitions', []):
-                      if c.get('status', {}).get('type', {}).get('state') != 'pre': continue
-                      names = [x.get('athlete', {}).get('displayName') for x in c.get('competitors', [])]
-                      print(t, e['id'], c['id'], names, 'odds in scoreboard:', 'odds' in c)
-                      url = 'https://sports.core.api.espn.com/v2/sports/tennis/leagues/%s/events/%s/competitions/%s/odds' % (t, e['id'], c['id'])
-                      out = subprocess.run(['curl', '-s', '-m', '20', '-A', 'Matchday-Android/2.0', url], capture_output=True, text=True).stdout
-                      print('  core odds:', out[:700])
-                      n += 1
-                      if n >= 3: break
-                  if n >= 3: break
-              if n >= 3: break
-          PY2
+          for L in soccer/eng.1 soccer/esp.1 soccer/uefa.euro soccer/fifa.worldq.uefa soccer/por.taca.portugal basketball/nba hockey/nhl; do
+            for Q in "dates=20261108-20261115&limit=1000" "dates=20261109"; do
+              printf "%s %s -> " "$L" "$Q"
+              curl -s -m 25 -A "Matchday-Android/2.0" -w " HTTP%{http_code}" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?$Q" | python3 -c "
+          import sys,json
+          raw=sys.stdin.read(); code=raw[raw.rfind(' HTTP'):]; body=raw[:raw.rfind(' HTTP')]
+          try:
+              d=json.loads(body); ev=d.get('events',[]); print(code, len(ev), 'events', sorted({e['date'][:10] for e in ev})[:9])
+          except Exception as e: print(code, 'not json', body[:80])"
+            done
           done
-          echo "=== sofascore robots"; curl -s -m 15 https://www.sofascore.com/robots.txt | head -30
-          echo "=== sofascore api status"; curl -s -o /dev/null -w "%{http_code}\n" -m 15 -A "Matchday-Android/2.0" "https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/2026-11-09"
-          echo "=== flashscore robots"; curl -s -m 15 https://www.flashscore.com/robots.txt | head -20
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
