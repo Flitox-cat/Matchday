@@ -190,8 +190,15 @@ class MatchRepository(
                     val stamp = "refresh:${comp.key}"
                     val age = cache.ageMs(stamp)
                     if (!force && comp.key !in inPlay && age != null && age < s.refreshMinutes * 60_000L) return@async true
+                    // Competitions with nothing scheduled this week (off-season tournaments) are re-checked every 12 h only.
+                    val dormant = cache.ageMs("dormant:${comp.key}")
+                    if (comp.key !in inPlay && dormant != null && dormant < 12 * HOUR) return@async true
                     val ok = refreshLeague(comp, days, now)
-                    if (ok) cache.touch(stamp)
+                    if (ok) {
+                        cache.touch(stamp)
+                        val anyGames = db.matches().since(now - 2 * DAY).any { it.leagueKey == comp.key }
+                        if (!anyGames) cache.touch("dormant:${comp.key}") else cache.expire("dormant:${comp.key}")
+                    }
                     ok
                 }
             }.awaitAll().let { results ->
@@ -227,10 +234,19 @@ class MatchRepository(
         val boards: List<EScoreboard?> = if (comp.sport == SportType.TENNIS) {
             listOf(fetchBoard(comp, null))
         } else {
-            // One request for the whole date range (8x fewer requests); per-day only as a fallback.
-            val range = fetchBoard(comp, "${days.first().format(YMD)}-${days.last().format(YMD)}", limit = 1000)
-            if (range != null) listOf(range)
-            else days.map { d -> async { fetchBoard(comp, d.format(YMD)) } }.awaitAll()
+            // Yesterday, today and tomorrow are always re-read; later days come from a 6-hour cache
+            // (they rarely change), which cuts requests to the free feed by about two thirds.
+            val today = LocalDate.now(ZoneOffset.UTC)
+            days.map { d ->
+                async {
+                    if (d <= today.plusDays(1)) fetchBoard(comp, d.format(YMD))
+                    else runCatching {
+                        cache.get("board:${comp.key}:${d.format(YMD)}", 6 * HOUR, EScoreboard.serializer()) {
+                            fetchBoard(comp, d.format(YMD)) ?: throw IllegalStateException("board unavailable")
+                        }
+                    }.getOrNull()
+                }
+            }.awaitAll()
         }
         val okBoards = boards.filterNotNull()
         if (okBoards.isEmpty()) return@coroutineScope false

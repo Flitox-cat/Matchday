@@ -58,6 +58,9 @@ class JsonCache(private val dao: CacheDao) {
 
     suspend fun touch(key: String) = dao.put(CacheEntity(key, "{}", System.currentTimeMillis()))
 
+    /** Marks a key as very old (used to clear flags). */
+    suspend fun expire(key: String) = dao.put(CacheEntity(key, "{}", 0L))
+
     private fun <T> decode(body: String, serializer: KSerializer<T>): T? =
         try { Network.json.decodeFromString(serializer, body) } catch (_: Exception) { null }
 }
