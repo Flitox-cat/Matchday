@@ -29,28 +29,18 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in soccer/esp.copa_del_rey soccer/ita.coppa_italia soccer/eng.league_cup basketball/nba hockey/nhl; do
-            for D in 20261109 20261110 20261111 20261112; do
-              printf "%s %s -> " "$L" "$D"
-              curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?dates=$D" | python3 -c "
-          import sys,json
-          d=json.load(sys.stdin); ev=d.get('events',[])
-          wo=sum(1 for e in ev if any(o for o in (e['competitions'][0].get('odds') or []) if o))
-          print(len(ev),'events,',wo,'with odds;', [e['name'][:40]+' '+e['date'] for e in ev[:4]])"
-            done
+          for r in tennis_atp tennis_wta tennis_MatchChartingProject tennis_slam_pointbypoint; do
+            echo "== $r"; curl -s -m 20 "https://api.github.com/repos/JeffSackmann/$r" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('pushed_at'),(d.get('license') or {}).get('spdx_id'))"
+            curl -s -m 20 "https://api.github.com/repos/JeffSackmann/$r/contents" | python3 -c "import sys,json;print([x['name'] for x in json.load(sys.stdin) if any(k in x['name'] for k in ('2024','2025','2026','current'))])"
           done
-          for T in atp wta; do
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/tennis/$T/scoreboard" | python3 -c "
-          import sys,json
-          d=json.load(sys.stdin); n=0; wo=0; dates=set()
-          for e in d.get('events',[]):
-              for g in e.get('groupings',[]):
-                  for c in g.get('competitions',[]):
-                      if c.get('status',{}).get('type',{}).get('state')=='pre':
-                          n+=1; dates.add(c.get('date','')[:10])
-                          if any(o for o in (c.get('odds') or []) if o): wo+=1
-          print('$T pre matches',n,'with odds',wo,sorted(dates))"
+          for f in tennis_atp/master/atp_matches_2026.csv tennis_atp/master/atp_matches_2025.csv tennis_atp/master/atp_rankings_current.csv tennis_wta/master/wta_matches_2026.csv; do
+            printf "%s: " $f; curl -s -m 20 "https://raw.githubusercontent.com/JeffSackmann/$f" | (head -c 300000 > /tmp/x; wc -l < /tmp/x; tail -1 /tmp/x | cut -c1-200)
           done
+          head -1 /tmp/x | cut -c1-600
+          for y in 2026 2025; do printf "tennis-data $y: "; curl -s -o /dev/null -w "%{http_code} %{size_download}\n" -m 20 "http://www.tennis-data.co.uk/$y/$y.xlsx"; done
+          curl -s -m 20 http://www.tennis-data.co.uk/alldata.php | grep -o 'href="[^"]*202[56][^"]*"' | head
+          printf "robots tennis-data: "; curl -s -m 15 http://www.tennis-data.co.uk/robots.txt | head -5
+          printf "\nespn athlete: "; curl -s -m 20 "https://site.web.api.espn.com/apis/common/v3/sports/tennis/atp/athletes/3623" | head -c 400
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
