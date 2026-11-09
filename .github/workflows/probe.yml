@@ -29,15 +29,15 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in soccer/eng.1 soccer/esp.1 soccer/uefa.euro soccer/fifa.worldq.uefa soccer/por.taca.portugal basketball/nba hockey/nhl; do
-            for Q in "dates=20261108-20261115&limit=1000" "dates=20261109"; do
+          for L in soccer/eng.1 basketball/nba; do
+            for Q in "dates=20261108-20261115" "dates=20261108-20261115&limit=300" "dates=20261108-20261115&limit=100" "dates=20261101-20261108&limit=300"; do
               printf "%s %s -> " "$L" "$Q"
-              curl -s -m 25 -A "Matchday-Android/2.0" -w " HTTP%{http_code}" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?$Q" | python3 -c "
+              curl -s --compressed -m 25 -A "Matchday-Android/2.0" -w " HTTP%{http_code}" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?$Q" | python3 -c "
           import sys,json
           raw=sys.stdin.read(); code=raw[raw.rfind(' HTTP'):]; body=raw[:raw.rfind(' HTTP')]
           try:
-              d=json.loads(body); ev=d.get('events',[]); print(code, len(ev), 'events', sorted({e['date'][:10] for e in ev})[:9])
-          except Exception as e: print(code, 'not json', body[:80])"
+              d=json.loads(body); ev=d.get('events',[]); print(code, len(ev), 'events', sorted({e['date'][:10] for e in ev})[:9], str(d)[:150] if not ev else '')
+          except Exception as e: print(code, 'not json', body[:200])"
             done
           done
           } > probe_out.txt 2>&1
