@@ -29,22 +29,31 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in esp.copa_del_rey esp.super_cup esp.2 eng.fa eng.league_cup eng.3 eng.4 eng.5 ita.coppa_italia ita.super_cup ita.2 ger.dfb_pokal ger.2 ger.super_cup fra.coupe_de_france fra.2 fra.super_cup por.taca.portugal por.2 ned.knvb_beker ned.2 sco.1 sco.tennents sco.cis bel.1 tur.1 tur.cup gre.1 aut.1 sui.1 den.1 nor.1 swe.1 rus.1 ukr.1 pol.1 cze.1 cyp.1 isr.1 rou.1 srb.1 cro.1 irl.1 bra.1 bra.2 bra.copa_do_brazil arg.1 arg.copa mex.1 col.1 chi.1 uru.1 per.1 ecu.1 par.1 ven.1 bol.1 jpn.1 kor.1 chn.1 aus.1 ind.1 tha.1 uae.1 qat.1 ksa.kings.cup egy.1 mar.1 rsa.1 nga.1 usa.open concacaf.champions concacaf.gold concacaf.nations.league conmebol.libertadores conmebol.sudamericana conmebol.america afc.champions afc.asian.cup caf.champions caf.nations uefa.nations uefa.euro uefa.super_cup uefa.euroq fifa.worldq.uefa fifa.worldq.conmebol fifa.worldq.afc fifa.worldq.caf fifa.worldq.concacaf fifa.friendly fifa.cwc fifa.intercontinental_cup club.friendly; do
-            g "$S/$L/scoreboard" | python3 -c "
-          import sys,json
-          try:
-              d=json.load(sys.stdin); lg=d.get('leagues') or [{}]
-              print('$L', 'OK', repr(lg[0].get('name')), len(d.get('events',[])))
-          except Exception as e:
-              print('$L', 'FAIL')"
+          for T in atp wta; do
+            g "https://site.api.espn.com/apis/site/v2/sports/tennis/$T/scoreboard" > sb_$T.json
+            python3 - "$T" <<'PY2'
+          import json, sys, subprocess
+          t = sys.argv[1]
+          d = json.load(open('sb_%s.json' % t))
+          n = 0
+          for e in d.get('events', []):
+              for g in e.get('groupings', []):
+                  for c in g.get('competitions', []):
+                      if c.get('status', {}).get('type', {}).get('state') != 'pre': continue
+                      names = [x.get('athlete', {}).get('displayName') for x in c.get('competitors', [])]
+                      print(t, e['id'], c['id'], names, 'odds in scoreboard:', 'odds' in c)
+                      url = 'https://sports.core.api.espn.com/v2/sports/tennis/leagues/%s/events/%s/competitions/%s/odds' % (t, e['id'], c['id'])
+                      out = subprocess.run(['curl', '-s', '-m', '20', '-A', 'Matchday-Android/2.0', url], capture_output=True, text=True).stdout
+                      print('  core odds:', out[:700])
+                      n += 1
+                      if n >= 3: break
+                  if n >= 3: break
+              if n >= 3: break
+          PY2
           done
-          for L in basketball/wnba basketball/mens-college-basketball basketball/womens-college-basketball hockey/mens-college-hockey; do
-            g "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard" | python3 -c "
-          import sys,json
-          try:
-              d=json.load(sys.stdin); lg=d.get('leagues') or [{}]; print('$L','OK',repr(lg[0].get('name')),len(d.get('events',[])))
-          except Exception: print('$L','FAIL')"
-          done
+          echo "=== sofascore robots"; curl -s -m 15 https://www.sofascore.com/robots.txt | head -30
+          echo "=== sofascore api status"; curl -s -o /dev/null -w "%{http_code}\n" -m 15 -A "Matchday-Android/2.0" "https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/2026-11-09"
+          echo "=== flashscore robots"; curl -s -m 15 https://www.flashscore.com/robots.txt | head -20
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
