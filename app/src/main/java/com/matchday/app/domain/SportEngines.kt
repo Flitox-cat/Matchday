@@ -26,6 +26,7 @@ data class SportInputs(
     val homeRank: Int? = null,        // tennis
     val awayRank: Int? = null,
     val live: Boolean = false,
+    val tennis: TennisContext? = null, // tennis: player profiles, head-to-head, surface (free sources)
 )
 
 /**
@@ -455,23 +456,37 @@ object SportEngines {
         val odds1x = fair(price(i.prices, "ML", "HOME", null), price(i.prices, "ML", "AWAY", null))
         val oddsFeed = fair(i.feed?.home?.best?.price, i.feed?.away?.best?.price)
         val rankP = if (i.homeRank != null && i.awayRank != null) 1 / (1 + exp(-0.62 * (ln(i.awayRank.toDouble()) - ln(i.homeRank.toDouble())))) else null
-        val sources = mutableListOf<String>()
-        val pMatch = when {
-            odds1x != null && rankP != null -> { sources += "1xBet price (70%) and world ranking (30%)"; 0.7 * odds1x + 0.3 * rankP }
-            odds1x != null -> { sources += "1xBet price"; odds1x }
-            oddsFeed != null && rankP != null -> { sources += "${i.feed?.home?.best?.bookmaker ?: "Bookmaker"} price (70%) and world ranking (30%)"; 0.7 * oddsFeed + 0.3 * rankP }
-            oddsFeed != null -> { sources += "${i.feed?.home?.best?.bookmaker ?: "Bookmaker"} price"; oddsFeed }
-            rankP != null -> { sources += "world ranking only"; rankP }
-            else -> null
-        }
-        val unavailable = listOf(
-            "Serve & return stats (1st serve %, points won, break points, aces, double faults)" to "No free source publishes these per match; the model uses a standard hold rate (${if (wta) "WTA 66%" else "ATP 80%"}) adjusted to match the players' strength.",
-            "Surface records, last 5-10 matches, head-to-head" to "Not available for tennis in the free feed.",
+        val tc = i.tennis
+        val hp = tc?.home; val ap = tc?.away
+        // Elo rating from recent results (started from the ranking) - replaces the plain ranking when available.
+        val eloP = if (hp?.elo != null && ap?.elo != null) TennisModel.eloWin(hp.elo, ap.elo) else null
+        // Serve/return model (ATP, TML database): each player's hold rate adjusted by the opponent's return.
+        val avgHold = tc?.avgHold ?: if (wta) 0.66 else 0.80
+        val serveHolds = if (hp?.hold != null && hp.brk != null && ap?.hold != null && ap.brk != null) {
+            val avgBrk = 1 - avgHold
+            (hp.hold - (ap.brk - avgBrk)).coerceIn(0.35, 0.97) to (ap.hold - (hp.brk - avgBrk)).coerceIn(0.35, 0.97)
+        } else null
+        val serveP = serveHolds?.let { (x, y) -> val st = avgSet(x, y).win; st * st * (3 - 2 * st) }
+        val bookName = i.feed?.home?.best?.bookmaker ?: "Bookmaker"
+        val parts = listOfNotNull(
+            (odds1x ?: oddsFeed)?.let { Triple(it, 3.0, if (odds1x != null) "1xBet price" else "$bookName price") },
+            eloP?.let { Triple(it, 1.5, "Elo rating from recent results") },
+            serveP?.let { Triple(it, 1.0, "serve/return records") },
+            if (eloP == null) rankP?.let { Triple(it, 1.0, "world ranking") } else null,
+        )
+        val wSum = parts.sumOf { it.second }
+        val pMatch = if (parts.isEmpty()) null else parts.sumOf { it.first * it.second } / wSum
+        val sources = parts.map { "${it.third} (${Math.round(it.second / wSum * 100)}%)" }.toMutableList()
+        val unavailable = listOfNotNull(
+            if (serveHolds == null) "Serve & return stats (holds, breaks)" to (if (wta) "No free WTA serve database; the model uses the WTA average hold rate (66%) adjusted to the players' strength."
+                else "Not in the TML database for one of these players; the model uses the ATP average hold rate adjusted to their strength.") else null,
+            "Per-match serve details (1st serve %, aces, double faults this season)" to "Not published by the free sources for the current season.",
+            if (tc == null) "Recent form, surface record, head-to-head" to "Couldn't be loaded (offline or source error)." else null,
             "Injuries / withdrawals" to "No reliable free tennis injury feed.",
             "Best of five sets" to "The model assumes best of three sets (Grand Slam men's matches are best of five).",
         )
         if (pMatch == null) {
-            return b.finish(false, "Data unavailable: no odds and no ranking for these players, so no estimate is made.", emptyList(), unavailable,
+            return b.finish(false, "Data unavailable: no odds, ranking or recent results for these players, so no estimate is made.", emptyList(), unavailable,
                 listOf("No injury information for tennis in the free sources."), 0.0, 0.0)
         }
         // Per-set win probability for best of three: P = s^2 (3 - 2s).
@@ -479,7 +494,8 @@ object SportEngines {
         repeat(50) { val s = (lo + hi) / 2; if (s * s * (3 - 2 * s) < pMatch) lo = s else hi = s }
         val pSet = (lo + hi) / 2
         // Find hold rates that give that set probability.
-        val base = if (wta) 0.66 else 0.80
+        // Overall hold level from the players' real serve records when known (sets more/fewer tie-breaks).
+        val base = serveHolds?.let { (x, y) -> (x + y) / 2 } ?: avgHold
         var dLo = -0.3; var dHi = 0.3
         repeat(40) {
             val d = (dLo + dHi) / 2
@@ -495,6 +511,23 @@ object SportEngines {
         ev += "Match-win estimate ${pct(pMatch)} for ${i.home} from ${sources.joinToString()}."
         if (i.homeRank != null || i.awayRank != null) ev += "Ranking: ${i.home} #${i.homeRank ?: "N/A"}, ${i.away} #${i.awayRank ?: "N/A"} (ESPN)."
         ev += "Implied service holds: ${i.home} ${pct(ha)}, ${i.away} ${pct(hb)}; set-win ${pct(s)}."
+        if (tc != null) {
+            tc.surface?.let { ev += "Surface: $it." }
+            if (eloP != null) ev += "Elo: ${i.home} ${Math.round(hp!!.elo!!)} vs ${i.away} ${Math.round(ap!!.elo!!)} -> ${pct(eloP)} (${hp.eloMatches} and ${ap.eloMatches} rated matches)."
+            for (p in listOfNotNull(hp, ap)) {
+                if (p.last.isNotEmpty()) ev += "${p.name} last ${p.last.size}: ${p.last.joinToString("") { if (it.won) "W" else "L" }} · 6 months ${p.wins6m}-${p.losses6m}" +
+                    (if (tc.surface != null) " · on ${tc.surface} (12 months) ${p.surfaceWins}-${p.surfaceLosses}" else "") +
+                    (p.gamesShare?.let { " · games won ${pct(it)} (last 15)" } ?: "") + "."
+                else ev += "${p.name}: no recent results in the free sources."
+                if (p.hold != null && p.brk != null) ev += "${p.name} serve: holds ${pct(p.hold)}, breaks ${pct(p.brk)} (${p.serveMatches} matches${if (p.serveOnSurface) " on ${tc.surface}" else ", all surfaces"}, TML)."
+            }
+            serveP?.let { ev += "Serve/return matchup: ${i.home} holds ${pct(serveHolds!!.first)}, ${i.away} ${pct(serveHolds.second)} -> ${pct(it)}." }
+            if (tc.h2h.isNotEmpty()) ev += "Head-to-head: ${i.home} ${tc.h2h.count { it.won }}-${tc.h2h.count { !it.won }}" +
+                " (last: ${tc.h2h.first().score}, ${if (tc.h2h.first().won) "won" else "lost"}, ${tc.h2h.first().event.substringAfter(" · ")})."
+            else ev += "Head-to-head: no meeting in the data window."
+            listOfNotNull(hp, ap).forEach { p -> p.daysSinceLast?.let { d -> if (p.matches3d > 0) ev += "${p.name}: ${p.matches3d} match${if (p.matches3d == 1) "" else "es"} (${p.sets3d} sets) in the last 3 days." else if (d <= 30) ev += "${p.name}: last played $d days ago." } }
+            ev += tc.windowNote
+        }
 
         // Match, sets
         val p20 = s * s; val p02 = (1 - s) * (1 - s); val p21 = 2 * s * s * (1 - s); val p12 = 2 * s * (1 - s) * (1 - s)
@@ -558,11 +591,13 @@ object SportEngines {
             b.add(MarketFamily.SETS, "S1TOT", "OVER", line, "1st set Over ${fmt(line)} games", po, ev)
             b.add(MarketFamily.SETS, "S1TOT", "UNDER", line, "1st set Under ${fmt(line)} games", 1 - po, ev)
         }
-        val risks = listOf(
-            "Serve/return, surface and recent-form data aren't available: the estimate rests on ${sources.joinToString()}.",
+        val risks = listOfNotNull(
+            if (tc == null) "Recent form, surface and serve data couldn't be loaded: the estimate rests on ${sources.joinToString()}." else "Estimate from ${sources.joinToString()}.",
+            listOfNotNull(hp, ap).firstOrNull { it.matches3d >= 3 || it.sets3d >= 8 }?.let { "${it.name} has played ${it.matches3d} matches (${it.sets3d} sets) in 3 days: fatigue risk." },
+            listOfNotNull(hp, ap).firstOrNull { it.last.size < 5 }?.let { "Few recent results for ${it.name} in the free sources: less reliable." },
             "Fitness and retirements can't be checked (no free injury feed).",
         ) + (if (i.live) listOf("Match in play: probabilities are pre-match estimates, not live.") else emptyList())
-        return b.finish(odds1x != null || oddsFeed != null || rankP != null, null, risks, unavailable,
+        return b.finish(parts.isNotEmpty(), null, risks, unavailable,
             listOf("No reliable free injury/withdrawal source for tennis."), ha, hb)
     }
 

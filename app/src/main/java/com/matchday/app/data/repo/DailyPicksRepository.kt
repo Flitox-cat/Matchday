@@ -97,6 +97,7 @@ class DailyPicksRepository(
     private val matches: MatchRepository,
     private val oneXBet: OneXBetRepository,
     private val teams: TeamRepository,
+    private val tennis: TennisRepository,
 ) {
     private val file = File(context.filesDir, "daily_picks.json")
     private val ser = ListSerializer(DailySlips.serializer())
@@ -293,10 +294,12 @@ class DailyPicksRepository(
                         val (h2h, inj) = runCatching { matches.summaryBasics(m) }.getOrDefault(emptyList<com.matchday.app.domain.RecentResult>() to com.matchday.app.domain.InjuryInfo(false))
                         var hg = emptyList<com.matchday.app.domain.TeamGame>(); var ag = emptyList<com.matchday.app.domain.TeamGame>()
                         var homeRank: Int? = null; var awayRank: Int? = null
+                        var tctx: com.matchday.app.domain.TennisContext? = null
                         if (sport == SportType.TENNIS) {
                             val r = ranks[if (m.competition.key.endsWith("wta")) "wta" else "atp"].orEmpty()
                             fun rank(n: String) = r[n] ?: r.entries.firstOrNull { com.matchday.app.domain.TeamMatcher.same(it.key, n) }?.value
                             homeRank = rank(m.homeTeam); awayRank = rank(m.awayTeam)
+                            tctx = tennis.context(m)
                         } else {
                             val (hid, aid) = matches.teamIds(m.id)
                             val gh = hid?.let { id -> runCatching { teams.history(m.competition.key, id) }.getOrNull() }
@@ -305,10 +308,19 @@ class DailyPicksRepository(
                             ag = ga?.games().orEmpty().filter { it.m.date < m.kickoff }
                         }
                         val a = com.matchday.app.domain.SportEngines.analyze(com.matchday.app.domain.SportInputs(
-                            sport, m.competition.key, m.homeTeam, m.awayTeam, m.kickoff, hg, ag, h2h, prices, source, m.odds, inj, false, homeRank, awayRank,
+                            sport, m.competition.key, m.homeTeam, m.awayTeam, m.kickoff, hg, ag, h2h, prices, source, m.odds, inj, false, homeRank, awayRank, tennis = tctx,
                         ))
                         val why = buildList {
-                            if (sport == SportType.TENNIS) add("ranking #${homeRank ?: "N/A"} vs #${awayRank ?: "N/A"}")
+                            if (sport == SportType.TENNIS) {
+                                add("ranking #${homeRank ?: "N/A"} vs #${awayRank ?: "N/A"}")
+                                val t = tctx
+                                val hp = t?.home; val ap = t?.away
+                                if (hp != null && ap != null && hp.last.isNotEmpty() && ap.last.isNotEmpty())
+                                    add("last 5 ${hp.last.take(5).joinToString("") { if (it.won) "W" else "L" }} vs ${ap.last.take(5).joinToString("") { if (it.won) "W" else "L" }}")
+                                t?.surface?.let { add(it) }
+                                val hh = t?.h2h.orEmpty()
+                                if (hh.isNotEmpty()) add("H2H ${hh.count { it.won }}-${hh.count { !it.won }}")
+                            }
                             else {
                                 if (hg.isNotEmpty() && ag.isNotEmpty()) add("last 5 ${hg.take(5).joinToString("") { if (it.win) "W" else "L" }} vs ${ag.take(5).joinToString("") { if (it.win) "W" else "L" }}")
                                 if (h2h.size >= 2) add("H2H ${h2h.count { it.points == 3 }}-${h2h.count { it.points != 3 }} (home side)")

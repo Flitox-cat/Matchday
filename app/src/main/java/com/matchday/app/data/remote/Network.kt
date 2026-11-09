@@ -41,5 +41,6 @@ object Network {
     val footballData: FootballDataService by lazy { retrofit("https://api.football-data.org/").create(FootballDataService::class.java) }
     val apiFootball: ApiFootballService by lazy { retrofit("https://v3.football.api-sports.io/").create(ApiFootballService::class.java) }
     val geocoding: GeocodingService by lazy { retrofit("https://geocoding-api.open-meteo.com/").create(GeocodingService::class.java) }
+    val raw: RawFileService by lazy { retrofit("https://raw.githubusercontent.com/").create(RawFileService::class.java) }
     val weather: WeatherService by lazy { retrofit("https://api.open-meteo.com/").create(WeatherService::class.java) }
 }

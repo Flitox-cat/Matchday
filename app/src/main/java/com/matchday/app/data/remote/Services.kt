@@ -163,3 +163,9 @@ interface ApiFootballService {
         @Query("fixture") fixtureId: Int,
     ): retrofit2.Response<AfLineupsResponse>
 }
+
+/** Plain files (CSV) from public GitHub repositories. */
+interface RawFileService {
+    @retrofit2.http.GET
+    suspend fun get(@retrofit2.http.Url url: String): okhttp3.ResponseBody
+}

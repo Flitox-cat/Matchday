@@ -69,6 +69,7 @@ private data class Research(
     val ids: Pair<String?, String?>,
     val api: OneXApi,
     val ranks: Map<String, Int> = emptyMap(),
+    val tennis: com.matchday.app.domain.TennisContext? = null,
 )
 
 class MatchDetailViewModel(private val c: AppContainer, private val id: String) : ViewModel() {
@@ -82,7 +83,8 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
 
     private val api = MutableStateFlow(OneXApi())
     private val ranks = MutableStateFlow<Map<String, Int>>(emptyMap())
-    private val research = combine(history, oneX, ids, api, ranks) { h, o, i, a, r -> Research(h, o, i, a, r) }
+    private val tennisCtx = MutableStateFlow<com.matchday.app.domain.TennisContext?>(null)
+    private val research = combine(history, oneX, ids, api, combine(ranks, tennisCtx) { r, t -> r to t }) { h, o, i, a, r -> Research(h, o, i, a, r.first, r.second) }
 
     val state: StateFlow<DetailUiState> = combine(item, extras, c.matches.observeFavourites(), research) { i, x, f, r ->
         val insights = if (i != null && i.competition.sport == SportType.FOOTBALL && (r.history.home != null || r.history.away != null || x.headToHead.isNotEmpty())) {
@@ -99,7 +101,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
         val markets = when {
             i == null -> null
             i.competition.sport == SportType.FOOTBALL -> runCatching { marketsFor(i, x, insights, r.oneX, r.history) }.getOrNull()
-            else -> runCatching { otherMarkets(i, x, r.oneX, r.history, r.ranks) }.getOrNull()
+            else -> runCatching { otherMarkets(i, x, r.oneX, r.history, r.ranks, r.tennis) }.getOrNull()
         }
         val verdict = if (i != null && i.competition.sport == SportType.FOOTBALL && !x.loading) {
             runCatching { verdictFor(i, x, insights, r.oneX) }.getOrNull()
@@ -141,7 +143,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
     }
 
     /** Basketball, hockey and tennis: dedicated engines (see SportEngines). */
-    private fun otherMarkets(i: MatchItem, x: DetailExtras, o: OneXBetState, h: HistoryState, ranks: Map<String, Int>): com.matchday.app.domain.MarketAnalysis? {
+    private fun otherMarkets(i: MatchItem, x: DetailExtras, o: OneXBetState, h: HistoryState, ranks: Map<String, Int>, tennis: com.matchday.app.domain.TennisContext?): com.matchday.app.domain.MarketAnalysis? {
         val ok = o as? OneXBetState.Ok
         fun rank(n: String) = ranks[n] ?: ranks.entries.firstOrNull { TeamMatcher.same(it.key, n) }?.value
         return com.matchday.app.domain.SportEngines.analyze(
@@ -154,6 +156,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                 homeRank = if (i.competition.sport == SportType.TENNIS) rank(i.homeTeam) else null,
                 awayRank = if (i.competition.sport == SportType.TENNIS) rank(i.awayTeam) else null,
                 live = i.status == MatchStatus.LIVE,
+                tennis = if (i.competition.sport == SportType.TENNIS) tennis else null,
             ),
         )
     }
@@ -188,6 +191,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                 viewModelScope.launch {
                     val tour = if (i.competition.key.endsWith("wta")) "wta" else "atp"
                     ranks.value = withContext(Dispatchers.IO) { runCatching { c.teams.tennisRanks(tour) }.getOrDefault(emptyMap()) }
+                    tennisCtx.value = withContext(Dispatchers.IO) { c.tennis.context(i) }
                 }
             } else loadHistory(i)
             viewModelScope.launch {
