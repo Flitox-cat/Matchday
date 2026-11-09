@@ -1,10 +1,18 @@
 rank        n=1538 brier=0.2216 logloss=0.6324 acc=0.634
 elo         n=1538 brier=0.2207 logloss=0.6302 acc=0.628
-serve       n=1538 brier=0.2264 logloss=0.6482 acc=0.628
+serve       n=1538 brier=0.2264 logloss=0.6482 acc=0.627
 blend       n=1538 brier=0.2197 logloss=0.6279 acc=0.633
 blend_rank  n=1538 brier=0.2189 logloss=0.6256 acc=0.635
-0.5 565 0.548 0.508
-0.6 444 0.648 0.644
-0.7 308 0.745 0.692
-0.8 167 0.84 0.82
-0.9 54 0.939 0.944
+e1r1s1      n=1538 brier=0.2180 logloss=0.6239 acc=0.632
+e1r1s1_shr  n=1538 brier=0.2180 logloss=0.6241 acc=0.632
+e15r1s1     n=1538 brier=0.2181 logloss=0.6239 acc=0.634
+e15r1s1_shr n=1538 brier=0.2180 logloss=0.6241 acc=0.634
+e1r1s05     n=1538 brier=0.2180 logloss=0.6236 acc=0.638
+e1r1s05_shr n=1538 brier=0.2179 logloss=0.6240 acc=0.638
+e2r1s1      n=1538 brier=0.2182 logloss=0.6241 acc=0.634
+e2r1s1_shr  n=1538 brier=0.2180 logloss=0.6242 acc=0.634
+0.5 633 0.546 0.517
+0.6 492 0.647 0.667
+0.7 293 0.746 0.73
+0.8 107 0.841 0.869
+0.9 13 0.913 1.0
