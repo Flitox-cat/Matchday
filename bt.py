@@ -50,6 +50,10 @@ for i,r in enumerate(rows):
         res['rank'].append((pr,y)); res['elo'].append((pe,y)); res['serve'].append((ps,y))
         res['blend'].append(((1.5*pe+ps)/2.5,y))
         res['blend_rank'].append(((pe+pr)/2,y))
+        for nm,ws in (('e1r1s1',(1,1,1)),('e15r1s1',(1.5,1,1)),('e1r1s05',(1,1,.5)),('e2r1s1',(2,1,1))):
+            p=(ws[0]*pe+ws[1]*pr+ws[2]*ps)/sum(ws)
+            res.setdefault(nm,[]).append((p,y))
+            res.setdefault(nm+'_shr',[]).append((0.5+0.9*(p-0.5),y))
     if 'RET' not in r['score'].upper():
         nw=n.get(w,0); nl=n.get(l,0)
         ew,el=g(w,wr),g(l,lr); e=1/(1+10**((el-ew)/400))
@@ -67,5 +71,5 @@ for k,v in res.items():
     print(f"{k:11s} n={len(v)} brier={br:.4f} logloss={ll:.4f} acc={acc:.3f}")
 # calibration of blend
 for lo in (0.5,0.6,0.7,0.8,0.9):
-    v=[(p,y) for p,y in res['blend'] if lo<=max(p,1-p)<lo+.1]
+    v=[(p,y) for p,y in res['e15r1s1_shr'] if lo<=max(p,1-p)<lo+.1]
     if v: print(lo, len(v), round(sum(max(p,1-p) for p,y in v)/len(v),3), round(sum((p>.5)==(y==1) for p,y in v)/len(v),3))
