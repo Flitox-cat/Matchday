@@ -101,7 +101,7 @@ open_card() {
 picks_flow() {
   adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
   tap_text "Daily Picks"; sleep 40; check "$1 daily picks"; screen_texts
-  tap_text "Next 7 days"; sleep 90; check "$1 daily picks 7 days"; screen_texts
+  tap_text "Next 3 days"; sleep 90; check "$1 daily picks 3 days"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
