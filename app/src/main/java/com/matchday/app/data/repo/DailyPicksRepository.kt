@@ -55,9 +55,15 @@ data class Slip(val size: Int, val minProbability: Double, val legs: List<SlipLe
     }
 }
 
+/** Which matches a set of slips covers, counted in Qatar calendar days. */
+enum class PickRange(val label: String, val startDay: Long, val days: Long) {
+    TODAY("Today", 0, 1), TOMORROW("Tomorrow", 1, 1), NEXT2("Next 2 days", 0, 2), NEXT3("Next 3 days", 0, 3), NEXT7("Next 7 days", 0, 7)
+}
+
 @Serializable
 data class DailySlips(
-    val date: String,                 // Qatar calendar day
+    val date: String,                 // Qatar calendar day the slips were built for (start of the range)
+    val range: String = "TODAY",      // PickRange name
     val createdAt: Long,
     val analysed: Int,
     val qualified: Int,
@@ -105,24 +111,28 @@ class DailyPicksRepository(
         tmp.renameTo(file)
     }
 
-    /** Today's slips, building them the first time the day is opened. */
-    suspend fun todayOrBuild(): DailySlips? {
-        val d = today()
-        all().firstOrNull { it.date == d }?.let { return it }
-        return build(force = false)
+    /** Slips for [range] starting today, building them the first time they're opened that day. */
+    suspend fun todayOrBuild(range: PickRange = PickRange.TODAY): DailySlips? {
+        val d = startDate(range)
+        all().firstOrNull { it.date == d && it.range == range.name }?.let { return it }
+        return build(range, force = false)
     }
 
-    /** Builds (or rebuilds, while no leg has started) today's slips. */
-    suspend fun build(force: Boolean): DailySlips? {
-        val d = today()
-        val existing = all().firstOrNull { it.date == d }
+    private fun startDate(r: PickRange) = LocalDate.now(QATAR).plusDays(r.startDay).toString()
+
+    /** Builds (or rebuilds, while no leg has started) the slips for [range]. */
+    suspend fun build(range: PickRange = PickRange.TODAY, force: Boolean): DailySlips? {
+        val d = startDate(range)
+        val existing = all().firstOrNull { it.date == d && it.range == range.name }
         val now = System.currentTimeMillis()
         if (existing != null && (!force || existing.slips.flatMap { it.legs }.any { it.kickoff <= now })) return existing
 
-        val endOfDay = LocalDate.now(QATAR).plusDays(1).atStartOfDay(QATAR).toInstant().toEpochMilli() + 6 * 3_600_000L
+        val first = LocalDate.now(QATAR).plusDays(range.startDay)
+        val from = maxOf(now + 15 * 60_000L, first.atStartOfDay(QATAR).toInstant().toEpochMilli())
+        // Today also takes the night's late games (until 06:00 Qatar), when European evenings end.
+        val until = first.plusDays(range.days).atStartOfDay(QATAR).toInstant().toEpochMilli() + if (range == PickRange.TODAY) 6 * 3_600_000L else 0L
         val candidates = matches.observeMatchesOnce().filter {
-            it.competition.sport == SportType.FOOTBALL && it.status == MatchStatus.UPCOMING &&
-                it.kickoff in (now + 15 * 60_000L) until endOfDay
+            it.competition.sport == SportType.FOOTBALL && it.status == MatchStatus.UPCOMING && it.kickoff in from until until
         }
         val excluded = HashMap<String, Int>()
         fun skip(reason: String) { excluded[reason] = (excluded[reason] ?: 0) + 1 }
@@ -133,7 +143,7 @@ class DailyPicksRepository(
                 m.competition.tier <= 2 -> { skip("Low-tier or very volatile leagues"); false }
                 else -> true
             }
-        }.sortedWith(compareByDescending<MatchItem> { it.competition.tier }.thenBy { it.kickoff }).take(80)
+        }.sortedWith(compareByDescending<MatchItem> { it.competition.tier }.thenBy { it.kickoff }).take(if (range.days > 2) 140 else 90)
 
         // Full analysis for each candidate (cached summaries/tables; limited parallelism in the repository).
         val analysed = coroutineScope {
@@ -177,8 +187,8 @@ class DailyPicksRepository(
             }.sortedWith(compareByDescending<SlipLeg> { it.probability }.thenByDescending { it.odds }).take(size).sortedBy { it.kickoff }
             Slip(size, minP, legs, if (legs.size < size) "Only ${legs.size} match${if (legs.size == 1) "" else "es"} passed the risk filter at ${Math.round(minP * 100)}%+ today; the slip isn't padded with risky picks." else null)
         }
-        val result = DailySlips(d, now, analysed.size, pool.size, excluded, slips)
-        lock.withLock { write(read().filter { it.date != d } + result) }
+        val result = DailySlips(d, range.name, now, analysed.size, pool.size, excluded, slips)
+        lock.withLock { write(read().filter { !(it.date == d && it.range == range.name) } + result) }
         return result
     }
 

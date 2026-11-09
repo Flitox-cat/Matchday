@@ -39,6 +39,7 @@ import androidx.lifecycle.viewModelScope
 import com.matchday.app.AppContainer
 import com.matchday.app.data.repo.DailyPicksRepository
 import com.matchday.app.data.repo.DailySlips
+import com.matchday.app.data.repo.PickRange
 import com.matchday.app.data.repo.Slip
 import com.matchday.app.data.repo.SlipLeg
 import com.matchday.app.ui.Formats
@@ -54,6 +55,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class PicksUi(
+    val range: PickRange = PickRange.TODAY,
     val days: List<DailySlips> = emptyList(),
     val selected: String = DailyPicksRepository.today(),
     val building: Boolean = false,
@@ -68,14 +70,20 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
 
     fun select(d: String) { _state.value = _state.value.copy(selected = d) }
 
+    fun setRange(r: PickRange) {
+        _state.value = _state.value.copy(range = r, selected = java.time.LocalDate.now(DailyPicksRepository.QATAR).plusDays(r.startDay).toString())
+        load(rebuild = false)
+    }
+
     fun load(rebuild: Boolean) {
+        val r = _state.value.range
         viewModelScope.launch {
             _state.value = _state.value.copy(building = true)
             withContext(Dispatchers.IO) {
                 runCatching { c.dailyPicks.settle(c.matches.recentFinished()) }
-                runCatching { if (rebuild) c.dailyPicks.build(force = true) else c.dailyPicks.todayOrBuild() }
+                runCatching { if (rebuild) c.dailyPicks.build(r, force = true) else c.dailyPicks.todayOrBuild(r) }
             }
-            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }
+            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name }
             _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true)
         }
     }
@@ -86,12 +94,20 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
     val st by vm.state.collectAsStateWithLifecycle()
     val zone = LocalZone.current
     val day = st.days.firstOrNull { it.date == st.selected }
+    val startToday = java.time.LocalDate.now(DailyPicksRepository.QATAR).plusDays(st.range.startDay).toString()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("Daily Picks", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Three accumulators a day: 5, 10 and 20 matches. Each match is analysed first; risky ones are left out.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(PickRange.values().toList()) { r ->
+                    FilterChip(selected = st.range == r, onClick = { vm.setRange(r) }, enabled = !st.building, label = { Text(r.label) })
+                }
             }
         }
         if (st.building) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = Accent.Purple) }
@@ -102,7 +118,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                         val w = st.days.first { it.date == d }.slips.map { it.won }
                         val mark = when { w.any { it == true } -> " ✅"; w.all { it == false } && w.isNotEmpty() -> " ❌"; else -> "" }
                         FilterChip(selected = d == st.selected, onClick = { vm.select(d) },
-                            label = { Text((if (d == DailyPicksRepository.today()) "Today" else d) + mark) })
+                            label = { Text((if (d == startToday) "Current" else d) + mark) })
                     }
                 }
             }
@@ -114,7 +130,9 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         } else {
             item {
                 InfoCard {
-                    Text("${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
+                    Text("${st.range.label}: ${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
+                    if (st.range.startDay > 0 || st.range.days > 1) Text("Games further ahead often have no bookmaker odds published yet, so they can't be picked (no invented prices). Rebuild later for more.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Built ${Formats.dayTime(day.createdAt, zone)}. Odds are the real bookmaker prices at that time (1xBet when you've loaded them, otherwise the free feed's bookmaker, as labelled).",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (day.excluded.isNotEmpty()) {
@@ -126,7 +144,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                         }
                     }
                     val started = day.slips.flatMap { it.legs }.any { it.kickoff <= System.currentTimeMillis() }
-                    if (day.date == DailyPicksRepository.today() && !started) {
+                    if (day.date == startToday && !started) {
                         OutlinedButton(onClick = { vm.load(rebuild = true) }, enabled = !st.building, modifier = Modifier.padding(top = 6.dp)) {
                             Text("Rebuild with the latest data")
                         }
