@@ -44,6 +44,7 @@ class MatchdayApp : Application() {
         appScope.launch {
             runCatching { container.settings.addNewDefaults("v3", com.matchday.app.domain.Catalog.NEW_DEFAULTS_V3) }
             runCatching { container.settings.addNewDefaults("v4", com.matchday.app.domain.Catalog.NEW_DEFAULTS_V4) }
+            runCatching { container.settings.addNewDefaults("v5", com.matchday.app.domain.Catalog.NEW_DEFAULTS_V5) }
             RefreshScheduler.schedule(this@MatchdayApp, container.settings.current().refreshMinutes)
         }
     }

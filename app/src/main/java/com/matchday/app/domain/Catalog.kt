@@ -131,6 +131,10 @@ object Catalog {
         Competition("football/nfl", "NFL", SportType.AMERICAN_FOOTBALL, 8, false, false, null),
         Competition("baseball/mlb", "MLB", SportType.BASEBALL, 7, false, false, null),
         Competition("hockey/nhl", "NHL", SportType.HOCKEY, 6, false, false, null),
+        Competition("hockey/womens-college-hockey", "NCAA Women's Hockey", SportType.HOCKEY, 3, false, false, null),
+        Competition("hockey/olympics-mens-ice-hockey", "Olympic Men's Ice Hockey", SportType.HOCKEY, 8, false, false, null),
+        Competition("hockey/olympics-womens-ice-hockey", "Olympic Women's Ice Hockey", SportType.HOCKEY, 6, false, false, null),
+        Competition("hockey/hockey-world-cup", "World Cup of Hockey", SportType.HOCKEY, 8, false, false, null),
         Competition("tennis/atp", "ATP Tennis", SportType.TENNIS, 7, false, false, null),
         Competition("tennis/wta", "WTA Tennis", SportType.TENNIS, 7, false, false, null),
     )
@@ -146,10 +150,16 @@ object Catalog {
     /** Added in version 4 (switched on once for existing users too). */
     val NEW_DEFAULTS_V4: Set<String> = setOf("soccer/caf.nations_qual")
 
+    /** Added in version 5: every hockey competition in the free feed (switched on once for existing users too). */
+    val NEW_DEFAULTS_V5: Set<String> = setOf(
+        "hockey/mens-college-hockey", "hockey/womens-college-hockey", "hockey/olympics-mens-ice-hockey",
+        "hockey/olympics-womens-ice-hockey", "hockey/hockey-world-cup",
+    )
+
     val DEFAULT_ENABLED: Set<String> = setOf(
         "soccer/uefa.champions", "soccer/eng.1", "soccer/esp.1", "soccer/uefa.europa",
         "soccer/ger.1", "soccer/ita.1", "soccer/fra.1", "basketball/nba", "tennis/atp", "tennis/wta", "hockey/nhl",
-    ) + NEW_DEFAULTS_V3 + NEW_DEFAULTS_V4
+    ) + NEW_DEFAULTS_V3 + NEW_DEFAULTS_V4 + NEW_DEFAULTS_V5
 
     fun find(key: String): Competition = ALL.firstOrNull { it.key == key }
         ?: Competition(key, key.substringAfter('/'), SportType.OTHER, 3, false, false, null)
