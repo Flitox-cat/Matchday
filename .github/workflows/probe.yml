@@ -29,17 +29,26 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for K in 123 3; do
-            printf "key %s eventsday: " $K
-            curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/$K/eventsday.php?d=2026-11-10&s=Ice%20Hockey" | python3 -c "
+          curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/search_all_leagues.php?s=Ice%20Hockey" > /tmp/l.json
+          python3 -c "
+          import json; d=json.load(open('/tmp/l.json')); L=d.get('countries') or d.get('leagues') or []; print(len(L)); print([(l['idLeague'],l['strLeague'],l.get('strCountry')) for l in L])"
+          for id in $(python3 -c "
+          import json; d=json.load(open('/tmp/l.json')); L=d.get('countries') or []
+          want=('KHL','Swedish','Finnish','German','Swiss','AHL','Czech','Austrian','Norwegian','Danish','Slovak','Champions','Allsvenskan','OHL','ECHL','PWHL')
+          print(' '.join(l['idLeague'] for l in L if any(w in l['strLeague'] for w in want)))"); do
+            printf "%s next: " $id
+            curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/eventsnextleague.php?id=$id" | python3 -c "
           import sys,json
           try:
-              d=json.load(sys.stdin); ev=d.get('events') or []; print(len(ev), sorted(set(e['strLeague'] for e in ev)))
-          except Exception as e: print('ERR', e)"
+              d=json.load(sys.stdin); ev=d.get('events') or []; print(len(ev), [(e['strEvent'][:28], e.get('strTimestamp')) for e in ev[:2]])
+          except Exception as e: print('ERR')"
+            sleep 1
           done
-          printf "khl next: "; curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/search_all_leagues.php?s=Ice%20Hockey" | python3 -c "
-          import sys,json; d=json.load(sys.stdin); print([(l['idLeague'],l['strLeague']) for l in (d.get('countries') or d.get('leagues') or [])][:40])"
-          printf "robots: "; curl -s -m 15 https://www.thesportsdb.com/robots.txt | head -6
+          printf "season KHL: "; curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=4920&s=2026-2027" | python3 -c "
+          import sys,json; d=json.load(sys.stdin); ev=d.get('events') or []; print(len(ev), ev[0]['dateEvent'] if ev else '', ev[-1]['dateEvent'] if ev else '', ev[-1].get('intHomeScore') if ev else '')"
+          printf "past KHL: "; curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/eventspastleague.php?id=4920" | python3 -c "
+          import sys,json; d=json.load(sys.stdin); ev=d.get('events') or []; print(len(ev), [(e['strEvent'][:28],e['dateEvent'],e.get('intHomeScore'),e.get('intAwayScore')) for e in ev[:3]])"
+          printf "table KHL: "; curl -s -m 25 "https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=4920&s=2026-2027" | head -c 300; echo
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
