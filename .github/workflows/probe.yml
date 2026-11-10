@@ -29,15 +29,19 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for D in "" 20261110 20261111 20261112 20261113 20261114 20261115 20261116 20261117 20261118; do
-            printf "%s: " "$D"
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/caf.nations_qual/scoreboard${D:+?dates=$D}" | python3 -c "
+          curl -s --compressed -m 25 "https://sports.core.api.espn.com/v2/sports/hockey/leagues?limit=100" | python3 -c "
+          import sys,json; d=json.load(sys.stdin); print(d.get('count'), [i['\$ref'].split('leagues/')[1].split('?')[0] for i in d.get('items',[])])"
+          for L in nhl mens-college-hockey womens-college-hockey ahl khl shl liiga del nl echl pwhl iihf.world olympics-mens-ice-hockey hockey-world-cup; do
+            for D in 20261110 20261111; do
+            printf "%s %s: " $L $D
+            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/hockey/$L/scoreboard?dates=$D" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin); ev=d.get('events',[]); print(len(ev), d.get('leagues',[{}])[0].get('season',{}).get('year'), [e['name'][:35]+' '+e['date'][:16]+' odds='+str(bool([o for o in (e['competitions'][0].get('odds') or []) if o])) for e in ev[:5]])"
+          try:
+              d=json.load(sys.stdin); ev=d.get('events',[]); lg=(d.get('leagues') or [{}])[0]
+              print(lg.get('name'), len(ev), 'odds', sum(1 for e in ev if [o for o in (e['competitions'][0].get('odds') or []) if o]), [e['name'][:30] for e in ev[:2]])
+          except Exception as e: print('ERR')"
+            done
           done
-          curl -s --compressed -m 25 "https://site.api.espn.com/apis/v2/sports/soccer/caf.nations_qual/standings" | python3 -c "
-          import sys,json
-          d=json.load(sys.stdin); c=d['children'][0]['standings']; print(c.get('season'), c.get('seasonDisplayName'), [ (e['team']['displayName'], [s['displayValue'] for s in e['stats'] if s['name'] in ('gamesPlayed','points')]) for e in c['entries']])"
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
