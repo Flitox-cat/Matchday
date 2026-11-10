@@ -146,6 +146,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: M
             when (tab) {
                 0 -> item {
                     Column {
+                        state.markets?.let { if (analysed(item) && item.status == MatchStatus.UPCOMING) ScoreCard(item, it) }
                         state.markets?.let { if (analysed(item)) TopSelectionsCard(item, it, state.insights, compact = true) }
                         if (isFootball(item)) VerdictCard(item, state)
                         (state.extras.prediction ?: item.prediction)?.injuryImpact?.let { InjuryImpactCard(item, it) }

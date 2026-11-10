@@ -37,6 +37,7 @@ data class MarketPick(
     val injuryShift: Double?,  // probability change caused by reported absences
     val evidence: List<String>,
     val risks: List<String>,
+    val baseProbability: Double? = null,   // before the self-correcting layer (see Calibration)
 ) {
     val edge: Double? get() = odds?.let { probability * it - 1 }
     val implied: Double? get() = odds?.let { 1 / it }
@@ -88,7 +89,21 @@ data class MarketAnalysis(
     val expectedAway: Double,
     val injuryNotes: List<String>,
     val priceSource: String?,
+    val scores: List<ScoreLine> = emptyList(),   // most likely final scores
+    val scoreNote: String? = null,
 )
+
+/** One predicted final score; [probability] null when an exact score has no meaningful chance (basketball). */
+data class ScoreLine(val score: String, val probability: Double?)
+
+object ScoreModel {
+    /** Top [n] exact scores of a goals grid (home-away). */
+    fun top(g: Array<DoubleArray>, n: Int = 3): List<ScoreLine> {
+        val cells = mutableListOf<Triple<Int, Int, Double>>()
+        for (x in g.indices) for (y in g[x].indices) cells += Triple(x, y, g[x][y])
+        return cells.sortedByDescending { it.third }.take(n).map { ScoreLine("${it.first}-${it.second}", it.third) }
+    }
+}
 
 /**
  * Comprehensive market analysis. Every probability comes from:
@@ -302,7 +317,7 @@ object MarketEngine {
         // Evidence and risks for each selection.
         val hp = GoalProfile.of("$home at home", hh)
         val ap = GoalProfile.of("$away away", aa)
-        val enriched = list.map { it.copy(evidence = it.evidence + evidence(it, home, away, lh, la, hp, ap, h2h, p, btts), risks = risks(it, insights, injuries, lineupsConfirmed, hp, ap)) }
+        val enriched = Calibration.apply("FOOTBALL", list, p?.modelWeight ?: 1.0).map { it.copy(evidence = it.evidence + evidence(it, home, away, lh, la, hp, ap, h2h, p, btts), risks = risks(it, insights, injuries, lineupsConfirmed, hp, ap)) }
 
         // Ranking: probability of success; skip near-certainties and prices too short to bet.
         val rankable = enriched.filter { it.probability < MAX_PROB && (it.odds == null || it.odds >= 1.10) && it.market != "AH" }
@@ -336,6 +351,8 @@ object MarketEngine {
             homeAtHome = hp, awayAway = ap,
             homeAll = GoalProfile.of("$home, all games", homeGames.take(10)), awayAll = GoalProfile.of("$away, all games", awayGames.take(10)),
             expectedHome = lh, expectedAway = la, injuryNotes = injuryNotes, priceSource = priceSource ?: feedSource,
+            scores = ScoreModel.top(PredictionEngine.grid(lh, la)),
+            scoreNote = "From the expected goals (${"%.1f".format(lh)} – ${"%.1f".format(la)}). Exact scores are rare even when likeliest - a guide, not a safe bet.",
         )
     }
 

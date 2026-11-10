@@ -362,6 +362,12 @@ private fun AccuracyCard(a: AccuracyReport) {
                 a.brier?.let { Text("Brier score: ${String.format("%.3f", it)} (lower is better; 0.25 = coin-flip guessing)", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
                 if (a.rows.sumOf { it.settled } < 30) Text("Fewer than 30 settled picks: too early to judge calibration.", style = MaterialTheme.typography.labelSmall, color = Accent.Orange)
+                Spacer(Modifier.height(8.dp))
+                Text("Self-correction", style = MaterialTheme.typography.titleSmall)
+                val adj = com.matchday.app.domain.Calibration.summary()
+                if (adj.isEmpty()) Text("Not active yet: each kind of bet needs ${com.matchday.app.domain.Calibration.MIN_N}+ settled picks in a probability range before the app adjusts its own estimates.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else adj.forEach { Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp)) }
             }
             Text("Pending: ${a.pending} · Void/unsettleable: ${a.voided} (draw-no-bet refunds, first-goal markets, missing half-time scores)",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))

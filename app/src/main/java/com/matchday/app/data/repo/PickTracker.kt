@@ -30,6 +30,8 @@ data class TrackedPick(
     val void: Boolean = false,     // refunded (draw no bet / handicap push) or can't be settled
     val note: String? = null,
     val score: String? = null,
+    val sport: String? = null,         // SportType name (null = recorded before this field existed: football)
+    val base: Double? = null,          // probability before the self-correcting layer
 )
 
 /** Accuracy figures for one category. */
@@ -118,6 +120,7 @@ class PickTracker(private val cache: JsonCache) {
                 val t = TrackedPick(
                     item.id, item.kickoff, item.homeTeam, item.awayTeam, p.family.name, p.market, p.sel, p.point, p.label,
                     p.probability, p.odds, source, i + 1, now,
+                    sport = item.competition.sport.name, base = p.baseProbability ?: p.probability,
                 )
                 if (idx >= 0) cur[idx] = t else cur += t
             }
@@ -162,6 +165,22 @@ class PickTracker(private val cache: JsonCache) {
         } finally {
             lock.unlock()
         }
+        refreshCalibration()
+    }
+
+    /** Rebuilds the self-correcting layer from all settled picks (one entry per match and selection). */
+    suspend fun refreshCalibration() {
+        val settled = all().filter { it.result != null }.distinctBy { "${it.matchId}|${it.market}|${it.sel}|${it.point}" }
+        val ranges = listOf(0.5 to 0.6, 0.6 to 0.7, 0.7 to 0.8, 0.8 to 0.9, 0.9 to 1.01)
+        com.matchday.app.domain.Calibration.learned = settled.groupBy { com.matchday.app.domain.Calibration.group(it.sport ?: "FOOTBALL", it.market) }
+            .mapValues { (_, l) ->
+                ranges.mapNotNull { (lo, hi) ->
+                    val b = l.filter { (it.base ?: it.probability) >= lo && (it.base ?: it.probability) < hi }
+                    if (b.isEmpty()) null else com.matchday.app.domain.Calibration.Bucket(
+                        lo, hi, b.size, b.map { it.base ?: it.probability }.average(), b.count { it.result == true }.toDouble() / b.size,
+                    )
+                }
+            }
     }
 
     enum class Outcome { WIN, LOSS, VOID, UNKNOWN }

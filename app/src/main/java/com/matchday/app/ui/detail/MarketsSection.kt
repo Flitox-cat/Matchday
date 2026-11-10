@@ -52,6 +52,25 @@ private fun ProbBar(p: Double, color: Color) {
 }
 
 /** Every market ranked from highest to lowest probability (10+ rows), with the top recommendations marked. */
+/** Most likely final scores (Overview). */
+@Composable
+fun ScoreCard(item: MatchItem, a: MarketAnalysis) {
+    if (a.scores.isEmpty()) return
+    InfoCard {
+        Text("Predicted score", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        a.scores.forEachIndexed { idx, s ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                val (h, w) = s.score.split("-").let { it.getOrElse(0) { "" } to it.getOrElse(1) { "" } }
+                Text("${item.homeTeam} $h – $w ${item.awayTeam}", style = if (idx == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (idx == 0) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f), maxLines = 3)
+                s.probability?.let { Text("${Math.round(it * 100)}%", style = MaterialTheme.typography.titleSmall, color = Accent.Purple) }
+            }
+        }
+        a.scoreNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+    }
+}
+
 @Composable
 fun TopSelectionsCard(item: MatchItem, a: MarketAnalysis, insights: List<Insight>, compact: Boolean) {
     var showAll by rememberSaveable(item.id, compact) { mutableStateOf(false) }

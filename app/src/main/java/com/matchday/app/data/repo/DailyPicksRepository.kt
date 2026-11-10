@@ -108,7 +108,7 @@ class DailyPicksRepository(
         private const val TAG = "DailyPicks"
         val QATAR: ZoneId = ZoneId.of("Asia/Qatar")
         /** Slip size -> minimum probability per leg (smaller slip = stricter). */
-        val SLIPS = listOf(5 to 0.70, 10 to 0.65, 20 to 0.60)
+        val SLIPS = listOf(5 to 0.75, 10 to 0.70, 20 to 0.65)   // stricter: fewer, higher-confidence legs
         const val MIN_ODDS = 1.20
         private val VOLATILE = setOf("soccer/club.friendly", "soccer/fifa.friendly")
         /** Daily Picks only use plain, widely offered markets (no exotic lines that are hard to find or settle). */
@@ -138,7 +138,7 @@ class DailyPicksRepository(
         val now = System.currentTimeMillis()
         // Slips built while fixtures or odds were still missing are rebuilt (every 30 min, until a leg starts).
         val notStarted = ex != null && ex.slips.flatMap { it.legs }.none { it.kickoff <= now }
-        val incomplete = ex != null && notStarted && (ex.rules < 2 ||
+        val incomplete = ex != null && notStarted && (ex.rules < 3 ||
             ex.slips.any { it.legs.size < it.size } && now - ex.createdAt > 30 * 60_000L)
         if (ex != null && !incomplete) return ex
         return build(range, sports, force = ex != null)
@@ -251,7 +251,8 @@ class DailyPicksRepository(
         val slips = SLIPS.map { (size, minP) ->
             // For each match: its best selection reliable enough for this slip (relaxed levels: 5 points lower).
             val legs = pool.mapNotNull { (m, cands) ->
-                cands.filter { it.pick.probability >= if (it.tier == 0) minP else minP - 0.05 }
+                // Relaxed / price-less legs must clear the same bar (+3 points without a price).
+                cands.filter { it.pick.probability >= if (it.tier == 2) minP + 0.03 else minP }
                     // Safest selection first (highest probability), not the biggest price.
                     .maxWithOrNull(compareBy<Cand> { it.pick.probability }.thenBy { it.pick.odds ?: 0.0 })?.let { c ->
                         val pk = c.pick
@@ -265,7 +266,7 @@ class DailyPicksRepository(
             val note = when {
                 total == 0 -> "No upcoming matches for the chosen sports in this period yet. Pull the latest fixtures on Home, then rebuild."
                 legs.isEmpty() && noOdds > 0 && pool.isEmpty() -> "Odds unavailable: $noOdds of $total matches have no bookmaker prices yet and no clear favourite."
-                legs.isEmpty() -> "Not enough safe matches: none of the $total matches reached ${Math.round((minP - 0.05) * 100)}%."
+                legs.isEmpty() -> "Not enough safe matches: none of the $total matches reached ${Math.round(minP * 100)}%."
                 legs.size < size -> "Not enough safe matches: only ${legs.size} of $total reached the reliability level, so the slip has ${legs.size} legs instead of $size (not padded with risky picks)."
                 else -> null
             }
@@ -275,7 +276,7 @@ class DailyPicksRepository(
             )
             Slip(size, minP, legs, (listOfNotNull(note) + extra).joinToString(" ").ifBlank { null })
         }
-        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 2)
+        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 3)
         lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk) } + result) }
         return result
     }

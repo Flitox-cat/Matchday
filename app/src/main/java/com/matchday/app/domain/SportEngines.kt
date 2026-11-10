@@ -69,6 +69,8 @@ object SportEngines {
 
     private class Builder(val i: SportInputs) {
         val list = mutableListOf<MarketPick>()
+        var scores: List<ScoreLine> = emptyList()
+        var scoreNote: String? = null
         fun add(fam: MarketFamily, m: String, sel: String, point: Double?, label: String, p: Double, evidence: List<String>, empirical: Pair<Double, Int>? = null) {
             if (p.isNaN()) return
             val prob = p.coerceIn(0.001, 0.999)
@@ -77,7 +79,7 @@ object SportEngines {
         }
 
         fun finish(reliable: Boolean, why: String?, risks: List<String>, unavailable: List<Pair<String, String>>, notes: List<String>, eh: Double, ea: Double): MarketAnalysis {
-            val withRisks = list.map { m ->
+            val withRisks = Calibration.apply(i.sport.name, list, if (i.prices != null || i.feed?.home?.best != null) 0.4 else 1.0).map { m ->
                 val r = mutableListOf<String>()
                 if (m.odds == null) r += "1xBet odds unavailable for this market: value can't be checked."
                 else if ((m.edge ?: 0.0) < 0) r += "1xBet price is shorter than our estimate (implied ${pct(m.implied!!)} vs ${pct(m.probability)})."
@@ -96,6 +98,7 @@ object SportEngines {
                 noPickReason = when { !reliable -> why; top.isEmpty() -> "No market reaches ${pct(MarketEngine.MIN_TOP_PROB)} at a fair price."; else -> null },
                 unavailable = unavailable, homeAtHome = null, awayAway = null, homeAll = null, awayAll = null,
                 expectedHome = eh, expectedAway = ea, injuryNotes = notes, priceSource = i.priceSource ?: i.feed?.home?.best?.bookmaker,
+                scores = if (reliable) scores else emptyList(), scoreNote = scoreNote,
             )
         }
     }
@@ -169,6 +172,12 @@ object SportEngines {
         margin += modelShare * fatigue
         val eh = (total + margin) / 2
         val ea = (total - margin) / 2
+        run {
+            val close = phi((5.5 - margin) / sdM) - phi((-5.5 - margin) / sdM)
+            b.scores = listOf(ScoreLine("${Math.round(eh)}-${Math.round(ea)}", null))
+            b.scoreNote = "Projected score from the expected points. Exact basketball scores are too spread out to give a chance; " +
+                "chance the game is decided by 5 points or fewer: ${pct(close)}."
+        }
 
         val ev = mutableListOf<String>()
         ev += "Expected score: ${i.home} ${f1(eh)} – ${f1(ea)} ${i.away} (margin ${sgn(Math.round(margin * 2) / 2.0)}, total ${f1(total)})."
@@ -314,6 +323,17 @@ object SportEngines {
         val g = hockeyGrid(lh, la)
         val pW = sum(g) { x, y -> x > y }; val pD = sum(g) { x, y -> x == y }; val pL = 1 - pW - pD
         val otHome = lh / (lh + la)   // overtime/shootout split by strength
+        run {
+            // Final score incl. OT/SO: a regulation tie becomes a one-goal win for one side.
+            val full = HashMap<Pair<Int, Int>, Double>()
+            for (x in g.indices) for (y in g[x].indices) {
+                val p = g[x][y]
+                if (x != y) full.merge(x to y, p, Double::plus)
+                else { full.merge(x + 1 to y, p * otHome, Double::plus); full.merge(x to y + 1, p * (1 - otHome), Double::plus) }
+            }
+            b.scores = full.entries.sortedByDescending { it.value }.take(3).map { ScoreLine("${it.key.first}-${it.key.second}", it.value) }
+            b.scoreNote = "Final score including overtime/shootout (a shootout counts as one goal for the winner). Exact scores are rare - a guide, not a safe bet."
+        }
         val ev = mutableListOf<String>()
         ev += "Expected regulation goals: ${i.home} ${f1(lh)} – ${f1(la)} ${i.away}."
         if (hs.isNotEmpty() && asg.isNotEmpty()) ev += "${i.home} ${if (hs === hh) "at home" else "overall"}: ${f1(hs.map { it.gf }.average())} for, ${f1(hs.map { it.ga }.average())} against (${hs.size} games). ${i.away} ${if (asg === aa) "away" else "overall"}: ${f1(asg.map { it.gf }.average())} for, ${f1(asg.map { it.ga }.average())} against (${asg.size} games)."
@@ -555,6 +575,8 @@ object SportEngines {
         b.add(MarketFamily.SETS, "CSS", "2-1", null, "Correct score ${i.home} 2-1", p21, ev)
         b.add(MarketFamily.SETS, "CSS", "1-2", null, "Correct score ${i.away} 2-1", p12, ev)
         b.add(MarketFamily.SETS, "CSS", "0-2", null, "Correct score ${i.away} 2-0", p02, ev)
+        b.scores = listOf("2-0" to p20, "2-1" to p21, "1-2" to p12, "0-2" to p02).sortedByDescending { it.second }.map { ScoreLine(it.first, it.second) }
+        b.scoreNote = "Sets (${i.home} first), best of three."
         b.add(MarketFamily.SETS, "SETHC", "HOME", 1.5, "${i.home} +1.5 sets", 1 - p02, ev)
         b.add(MarketFamily.SETS, "SETHC", "AWAY", 1.5, "${i.away} +1.5 sets", 1 - p20, ev)
 
