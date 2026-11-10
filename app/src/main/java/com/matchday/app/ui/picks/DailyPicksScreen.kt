@@ -250,7 +250,7 @@ private fun LegRow(leg: SlipLeg, zone: java.time.ZoneId, onMatch: (String) -> Un
     Column(Modifier.fillMaxWidth().clickable { onMatch(leg.matchId) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("${PickSport.emojiOf(leg.sport)} ${leg.home} vs ${leg.away}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${PickSport.emojiOf(leg.sport)} ${leg.home} vs ${leg.away}", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${leg.competition} · ${Formats.kickoffLabel(leg.kickoff, zone)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val (icon, col) = when {
@@ -265,7 +265,7 @@ private fun LegRow(leg: SlipLeg, zone: java.time.ZoneId, onMatch: (String) -> Un
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            Text(leg.label, style = MaterialTheme.typography.titleSmall, color = Accent.Blue, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(leg.label, style = MaterialTheme.typography.titleSmall, color = Accent.Blue, modifier = Modifier.weight(1f), maxLines = 3, overflow = TextOverflow.Ellipsis)
             val o = leg.odds
             if (o != null) Text("@ ${String.format("%.2f", o)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Accent.Green)
             else Text("Odds unavailable", style = MaterialTheme.typography.labelSmall, color = Accent.Orange)

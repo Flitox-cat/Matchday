@@ -106,10 +106,10 @@ private fun RankRow(rank: Int, m: MarketPick, recommended: Boolean, insights: Li
             Text("$rank", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(24.dp))
             Column(Modifier.weight(1f)) {
                 Text((if (recommended) "★ " else "") + m.label, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (recommended) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    fontWeight = if (recommended) FontWeight.Bold else FontWeight.Normal, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Text(
                     m.family.label + " · " + (m.odds?.let { "${Formats.odds(it)} ${m.bookmaker ?: ""}" + (m.edge?.let { e -> " (value ${if (e >= 0) "+" else ""}${Math.round(e * 100)}%)" } ?: "") } ?: "1xBet odds: not loaded"),
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
             }
             ProbBar(m.probability, c)
@@ -221,7 +221,7 @@ private fun AllMarketsCard(a: MarketAnalysis) {
             Text(fam.label, style = MaterialTheme.typography.titleSmall, color = Accent.Purple)
             list.forEach { m ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(m.label, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(m.label, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     ProbBar(m.probability, probColor(m.probability))
                     Text(pct(m.probability), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.width(42.dp))
                     Text(m.odds?.let { Formats.odds(it) } ?: "N/A", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.End, modifier = Modifier.width(46.dp),

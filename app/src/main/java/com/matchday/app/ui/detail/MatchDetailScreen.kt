@@ -375,7 +375,7 @@ private fun ProbRow(label: String, model: Double?, market: Double?, final: Doubl
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1.6f))
+        Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1.6f))
         Text(Formats.pct(model), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
         Text(Formats.pct(market), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
         Text(Formats.pct(final), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
@@ -433,7 +433,7 @@ private fun FairRow(label: String, prob: Double, best: Double?) {
     val fair = if (prob > 0) 1 / prob else null
     val edge = if (best != null) prob * best - 1 else null
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 3, overflow = TextOverflow.Ellipsis)
         Text("fair ${Formats.odds(fair)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(84.dp), textAlign = TextAlign.End)
         Text("best ${Formats.odds(best)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(84.dp), textAlign = TextAlign.End)
         Text(
@@ -458,7 +458,7 @@ private fun MarketCard(m: MarketOdds) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(o.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(o.label, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(
                         "Consensus ${Formats.pct(o.consensusProb)} · best at ${best?.bookmaker ?: "N/A"}",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
