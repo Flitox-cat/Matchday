@@ -288,7 +288,7 @@ object SportEngines {
             var best = 0.5; var err = 9.0
             var r = 0.30
             while (r <= 0.70) {
-                val g = PredictionEngine.grid(t * r, t * (1 - r))
+                val g = hockeyGrid(t * r, t * (1 - r))
                 val pw = sum(g) { x, y -> x > y }; val pd = sum(g) { x, y -> x == y }
                 val e = abs(pw + pd * r - mlHome)
                 if (e < err) { err = e; best = r }
@@ -311,7 +311,7 @@ object SportEngines {
         if (dH != null && dH <= 1) lh *= 1 - 0.04 * share
         if (dA != null && dA <= 1) la *= 1 - 0.04 * share
 
-        val g = PredictionEngine.grid(lh, la)
+        val g = hockeyGrid(lh, la)
         val pW = sum(g) { x, y -> x > y }; val pD = sum(g) { x, y -> x == y }; val pL = 1 - pW - pD
         val otHome = lh / (lh + la)   // overtime/shootout split by strength
         val ev = mutableListOf<String>()
@@ -375,6 +375,19 @@ object SportEngines {
         if (hs.size < 6 || asg.size < 6) risks += "Few completed games this season (${hs.size} and ${asg.size})."
         if (i.live) risks += "Game in play: probabilities are pre-game estimates, not live."
         return b.finish(true, null, risks, unavailableHockey(), injuryNotes(i, "each player out lowers that team's goals by 3% (doubtful 1%), capped at 12%; back-to-back -4%."), lh, la)
+    }
+
+    /**
+     * Hockey score grid: independent Poisson goals understate ties (teams protect a draw late on and
+     * pull the goalie when behind), so tied scores are weighted x1.4. This brings the regulation-tie
+     * rate to the NHL's real ~20-23% (Poisson alone gives ~15-17%).
+     */
+    private fun hockeyGrid(lh: Double, la: Double): Array<DoubleArray> {
+        val g = PredictionEngine.grid(lh, la)
+        var tot = 0.0
+        for (x in g.indices) for (y in g[x].indices) { if (x == y) g[x][y] *= 1.4; tot += g[x][y] }
+        if (tot > 0) for (x in g.indices) for (y in g[x].indices) g[x][y] /= tot
+        return g
     }
 
     private fun sum(g: Array<DoubleArray>, p: (Int, Int) -> Boolean): Double {
