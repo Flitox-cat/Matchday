@@ -1,29 +1,9 @@
-6 ['hockey-world-cup', 'mens-college-hockey', 'nhl', 'olympics-mens-ice-hockey', 'olympics-womens-ice-hockey', 'womens-college-hockey']
-nhl 20261110: National Hockey League 7 odds 7 ['Colorado Avalanche at Toronto ', 'Minnesota Wild at Montreal Can']
-nhl 20261111: National Hockey League 6 odds 0 ['Tampa Bay Lightning at Buffalo', 'New York Rangers at Calgary Fl']
-mens-college-hockey 20261110: NCAA Men's Ice Hockey 1 odds 0 ['Harvard Crimson at Boston Univ']
-mens-college-hockey 20261111: NCAA Men's Ice Hockey 0 odds 0 []
-womens-college-hockey 20261110: NCAA Women's Hockey 1 odds 0 ['Quinnipiac Bobcats at Sacred H']
-womens-college-hockey 20261111: NCAA Women's Hockey 0 odds 0 []
-ahl 20261110: None 0 odds 0 []
-ahl 20261111: None 0 odds 0 []
-khl 20261110: None 0 odds 0 []
-khl 20261111: None 0 odds 0 []
-shl 20261110: None 0 odds 0 []
-shl 20261111: None 0 odds 0 []
-liiga 20261110: None 0 odds 0 []
-liiga 20261111: None 0 odds 0 []
-del 20261110: None 0 odds 0 []
-del 20261111: None 0 odds 0 []
-nl 20261110: None 0 odds 0 []
-nl 20261111: None 0 odds 0 []
-echl 20261110: None 0 odds 0 []
-echl 20261111: None 0 odds 0 []
-pwhl 20261110: None 0 odds 0 []
-pwhl 20261111: None 0 odds 0 []
-iihf.world 20261110: None 0 odds 0 []
-iihf.world 20261111: None 0 odds 0 []
-olympics-mens-ice-hockey 20261110: Men's Ice Hockey 0 odds 0 []
-olympics-mens-ice-hockey 20261111: Men's Ice Hockey 0 odds 0 []
-hockey-world-cup 20261110: World Cup of Hockey 0 odds 0 []
-hockey-world-cup 20261111: World Cup of Hockey 0 odds 0 []
+key 123 eventsday: 3 ['Russian KHL']
+key 3 eventsday: ERR Expecting value: line 1 column 1 (char 0)
+khl next: [('4933', 'Austrian ICE Hockey League'), ('4924', 'Belarusian Extraleague'), ('5276', 'CEHL'), ('5159', 'Canadian OHL'), ('5161', 'Canadian QMJHL')]
+robots: User-agent: *
+Allow: /
+Disallow: /nfo/
+Disallow: /nfo.php
+Content-Signal: ai-train=no, search=yes, ai-input=yes
+
