@@ -71,6 +71,37 @@ class PickTracker(private val cache: JsonCache) {
             market.startsWith("1H") -> "First-half markets"
             else -> "Other markets"
         }
+
+        private fun b(x: Boolean) = if (x) Outcome.WIN else Outcome.LOSS
+
+        fun outcomeOf(m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?): Outcome = when (m) {
+            "1X2" -> b(when (sel) { "HOME" -> hg > ag; "AWAY" -> ag > hg; else -> hg == ag })
+            "DC" -> b(when (sel) { "1X" -> hg >= ag; "X2" -> ag >= hg; else -> hg != ag })
+            "DNB" -> if (hg == ag) Outcome.VOID else b(if (sel == "DNB_HOME") hg > ag else ag > hg)
+            "OU" -> pt?.let { b(if (sel == "OVER") hg + ag > it else hg + ag < it) } ?: Outcome.UNKNOWN
+            "BTTS" -> b((hg > 0 && ag > 0) == (sel == "YES"))
+            "TT" -> pt?.let {
+                when (sel) {
+                    "HOME_OVER" -> b(hg > it); "HOME_UNDER" -> b(hg < it)
+                    "AWAY_OVER" -> b(ag > it); "AWAY_UNDER" -> b(ag < it)
+                    else -> Outcome.UNKNOWN
+                }
+            } ?: Outcome.UNKNOWN
+            "CS" -> b(if (sel == "HOME") ag == 0 else hg == 0)
+            "WTN" -> b(if (sel == "HOME") hg > ag && ag == 0 else ag > hg && hg == 0)
+            "AH" -> pt?.let {
+                val d = (if (sel == "HOME") hg - ag else ag - hg) + it
+                if (d > 0) Outcome.WIN else if (d == 0.0) Outcome.VOID else Outcome.LOSS
+            } ?: Outcome.UNKNOWN
+            "1H" -> if (hh == null || ha == null) Outcome.UNKNOWN else b(when (sel) { "H1_HOME" -> hh > ha; "H1_AWAY" -> ha > hh; else -> hh == ha })
+            "1HOU" -> if (hh == null || ha == null || pt == null) Outcome.UNKNOWN else b(if (sel == "OVER") hh + ha > pt else hh + ha < pt)
+            "1HBTTS" -> if (hh == null || ha == null) Outcome.UNKNOWN else b((hh > 0 && ha > 0) == (sel == "YES"))
+            "WEH" -> if (hh == null || ha == null) Outcome.UNKNOWN else {
+                val sh = hg - hh; val sa = ag - ha
+                b(if (sel == "HOME") hh > ha || sh > sa else ha > hh || sa > sh)
+            }
+            else -> Outcome.UNKNOWN // first/last goal: no goal timeline in the free feed
+        }
     }
 
     suspend fun all(): List<TrackedPick> = runCatching { cache.peek(KEY, ser) }.getOrNull().orEmpty()
@@ -135,37 +166,8 @@ class PickTracker(private val cache: JsonCache) {
 
     enum class Outcome { WIN, LOSS, VOID, UNKNOWN }
 
-    private fun b(x: Boolean) = if (x) Outcome.WIN else Outcome.LOSS
-
     /** Result of one selection from the final (and half-time) score. */
-    fun outcome(m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?): Outcome = when (m) {
-        "1X2" -> b(when (sel) { "HOME" -> hg > ag; "AWAY" -> ag > hg; else -> hg == ag })
-        "DC" -> b(when (sel) { "1X" -> hg >= ag; "X2" -> ag >= hg; else -> hg != ag })
-        "DNB" -> if (hg == ag) Outcome.VOID else b(if (sel == "DNB_HOME") hg > ag else ag > hg)
-        "OU" -> pt?.let { b(if (sel == "OVER") hg + ag > it else hg + ag < it) } ?: Outcome.UNKNOWN
-        "BTTS" -> b((hg > 0 && ag > 0) == (sel == "YES"))
-        "TT" -> pt?.let {
-            when (sel) {
-                "HOME_OVER" -> b(hg > it); "HOME_UNDER" -> b(hg < it)
-                "AWAY_OVER" -> b(ag > it); "AWAY_UNDER" -> b(ag < it)
-                else -> Outcome.UNKNOWN
-            }
-        } ?: Outcome.UNKNOWN
-        "CS" -> b(if (sel == "HOME") ag == 0 else hg == 0)
-        "WTN" -> b(if (sel == "HOME") hg > ag && ag == 0 else ag > hg && hg == 0)
-        "AH" -> pt?.let {
-            val d = (if (sel == "HOME") hg - ag else ag - hg) + it
-            if (d > 0) Outcome.WIN else if (d == 0.0) Outcome.VOID else Outcome.LOSS
-        } ?: Outcome.UNKNOWN
-        "1H" -> if (hh == null || ha == null) Outcome.UNKNOWN else b(when (sel) { "H1_HOME" -> hh > ha; "H1_AWAY" -> ha > hh; else -> hh == ha })
-        "1HOU" -> if (hh == null || ha == null || pt == null) Outcome.UNKNOWN else b(if (sel == "OVER") hh + ha > pt else hh + ha < pt)
-        "1HBTTS" -> if (hh == null || ha == null) Outcome.UNKNOWN else b((hh > 0 && ha > 0) == (sel == "YES"))
-        "WEH" -> if (hh == null || ha == null) Outcome.UNKNOWN else {
-            val sh = hg - hh; val sa = ag - ha
-            b(if (sel == "HOME") hh > ha || sh > sa else ha > hh || sa > sh)
-        }
-        else -> Outcome.UNKNOWN // first/last goal: no goal timeline in the free feed
-    }
+    fun outcome(m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?): Outcome = outcomeOf(m, sel, pt, hg, ag, hh, ha)
 
     suspend fun report(): AccuracyReport {
         val all = all()
