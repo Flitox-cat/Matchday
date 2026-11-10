@@ -1,9 +1,7 @@
-key 123 eventsday: 3 ['Russian KHL']
-key 3 eventsday: ERR Expecting value: line 1 column 1 (char 0)
-khl next: [('4933', 'Austrian ICE Hockey League'), ('4924', 'Belarusian Extraleague'), ('5276', 'CEHL'), ('5159', 'Canadian OHL'), ('5161', 'Canadian QMJHL')]
-robots: User-agent: *
-Allow: /
-Disallow: /nfo/
-Disallow: /nfo.php
-Content-Signal: ai-train=no, search=yes, ai-input=yes
-
+5
+[('4933', 'Austrian ICE Hockey League', 'Austria'), ('4924', 'Belarusian Extraleague', 'Belarus'), ('5276', 'CEHL', 'Belgium'), ('5159', 'Canadian OHL', 'Canada'), ('5161', 'Canadian QMJHL', 'Canada')]
+4933 next: 0 []
+5159 next: 1 [('Sudbury Wolves vs Soo Greyho', '2026-11-10T15:30:00')]
+season KHL: 15 2026-09-05 2026-09-07 0
+past KHL: 1 [('SKA Saint Petersburg vs Spar', '2026-11-09', '7', '1')]
+table KHL: 
