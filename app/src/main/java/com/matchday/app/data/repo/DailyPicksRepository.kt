@@ -84,6 +84,7 @@ data class DailySlips(
     val qualified: Int,
     val excluded: Map<String, Int>,   // reason -> number of matches left out
     val slips: List<Slip>,
+    val rules: Int = 1,               // selection rules version (2 = safest selection per match)
 )
 
 /**
@@ -110,7 +111,8 @@ class DailyPicksRepository(
         val SLIPS = listOf(5 to 0.70, 10 to 0.65, 20 to 0.60)
         const val MIN_ODDS = 1.20
         private val VOLATILE = setOf("soccer/club.friendly", "soccer/fifa.friendly")
-        private val FOOTBALL_SETTLEABLE = setOf("1X2", "DC", "DNB", "OU", "BTTS", "TT", "CS", "AH")
+        /** Daily Picks only use plain, widely offered markets (no exotic lines that are hard to find or settle). */
+        private val FOOTBALL_SAFE = setOf("1X2", "DC", "DNB", "OU", "BTTS")
 
         fun today(): String = LocalDate.now(QATAR).toString()
     }
@@ -135,8 +137,9 @@ class DailyPicksRepository(
         val ex = all().firstOrNull { it.date == d && it.range == range.name && it.sports.toSet() == sports.map { x -> x.name }.toSet() }
         val now = System.currentTimeMillis()
         // Slips built while fixtures or odds were still missing are rebuilt (every 30 min, until a leg starts).
-        val incomplete = ex != null && ex.slips.any { it.legs.size < it.size } && ex.slips.flatMap { it.legs }.none { it.kickoff <= now } &&
-            now - ex.createdAt > 30 * 60_000L
+        val notStarted = ex != null && ex.slips.flatMap { it.legs }.none { it.kickoff <= now }
+        val incomplete = ex != null && notStarted && (ex.rules < 2 ||
+            ex.slips.any { it.legs.size < it.size } && now - ex.createdAt > 30 * 60_000L)
         if (ex != null && !incomplete) return ex
         return build(range, sports, force = ex != null)
     }
@@ -201,8 +204,8 @@ class DailyPicksRepository(
             val nearEven = ml != null && abs(ml - 0.5) < 0.05
             val tennis = m.competition.sport == SportType.TENNIS
             val priced = mk.markets.any { it.odds != null }
-            val t0 = mk.markets.filter { pk -> priced(pk, 0.58, -0.03) && !(even && pk.market in setOf("ML", "REG")) }
-            val t1 = mk.markets.filter { pk -> priced(pk, 0.55, -0.06) && !(nearEven && pk.market in setOf("ML", "REG")) }
+            val t0 = mk.markets.filter { pk -> settleableOther(pk.market, tennis) && priced(pk, 0.58, -0.03) && !(even && pk.market in setOf("ML", "REG")) }
+            val t1 = mk.markets.filter { pk -> settleableOther(pk.market, tennis) && priced(pk, 0.55, -0.06) && !(nearEven && pk.market in setOf("ML", "REG")) }
             val t2 = if (priced) emptyList() else mk.markets.filter { pk ->
                 pk.probability >= 0.60 && pk.probability < 0.95 && settleableOther(pk.market, tennis) && !(nearEven && pk.market == "ML")
             }
@@ -224,10 +227,10 @@ class DailyPicksRepository(
             val priced = mk.markets.any { it.odds != null }
             val strict = p.completeness >= 0.6 && p.confidence != Confidence.LOW && dis <= 0.15
             val relaxedOk = p.completeness >= 0.45 && dis <= 0.25
-            val t0 = if (!strict) emptyList() else mk.markets.filter { pk -> priced(pk, 0.58, -0.03) && !(gap < 0.12 && pk.market in setOf("1X2", "DNB")) }
-            val t1 = if (!relaxedOk) emptyList() else mk.markets.filter { pk -> priced(pk, 0.55, -0.06) && !(gap < 0.06 && pk.market in setOf("1X2", "DNB")) }
+            val t0 = if (!strict) emptyList() else mk.markets.filter { pk -> pk.market in FOOTBALL_SAFE && priced(pk, 0.58, -0.03) && !(gap < 0.12 && pk.market in setOf("1X2", "DNB")) }
+            val t1 = if (!relaxedOk) emptyList() else mk.markets.filter { pk -> pk.market in FOOTBALL_SAFE && priced(pk, 0.55, -0.06) && !(gap < 0.06 && pk.market in setOf("1X2", "DNB")) }
             val t2 = if (priced || !relaxedOk) emptyList() else mk.markets.filter { pk ->
-                pk.probability >= 0.60 && pk.probability < 0.95 && pk.market in FOOTBALL_SETTLEABLE && !(gap < 0.06 && pk.market in setOf("1X2", "DNB"))
+                pk.probability >= 0.60 && pk.probability < 0.95 && pk.market in FOOTBALL_SAFE && !(gap < 0.06 && pk.market in setOf("1X2", "DNB"))
             }
             val (tier, picks) = listOf(0 to t0, 1 to t1, 2 to t2).firstOrNull { it.second.isNotEmpty() } ?: (0 to emptyList())
             if (picks.isEmpty()) {
@@ -249,7 +252,8 @@ class DailyPicksRepository(
             // For each match: its best selection reliable enough for this slip (relaxed levels: 5 points lower).
             val legs = pool.mapNotNull { (m, cands) ->
                 cands.filter { it.pick.probability >= if (it.tier == 0) minP else minP - 0.05 }
-                    .maxWithOrNull(compareBy<Cand> { it.pick.odds ?: 0.0 }.thenBy { it.pick.probability })?.let { c ->
+                    // Safest selection first (highest probability), not the biggest price.
+                    .maxWithOrNull(compareBy<Cand> { it.pick.probability }.thenBy { it.pick.odds ?: 0.0 })?.let { c ->
                         val pk = c.pick
                         val pre = when (c.tier) { 2 -> "Odds unavailable - model prediction only · "; 1 -> "Relaxed filter (limited data or value) · "; else -> "" }
                         SlipLeg(m.id, m.kickoff, m.competition.title, m.homeTeam, m.awayTeam, pk.market, pk.sel, pk.point, pk.label,
@@ -271,7 +275,7 @@ class DailyPicksRepository(
             )
             Slip(size, minP, legs, (listOfNotNull(note) + extra).joinToString(" ").ifBlank { null })
         }
-        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips)
+        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 2)
         lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk) } + result) }
         return result
     }

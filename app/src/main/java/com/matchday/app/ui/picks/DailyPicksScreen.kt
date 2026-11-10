@@ -125,7 +125,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("Daily Picks", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Three accumulators a day (5, 10 and 20 matches) from the sports you choose. Each match is analysed first; risky ones are left out.",
+                Text("Three accumulators a day (5, 10 and 20 matches) from the sports you choose. Each match is analysed first; risky ones are left out, and each leg is the safest selection (highest probability, plain markets), not the biggest price.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
