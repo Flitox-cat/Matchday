@@ -29,15 +29,24 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for X in "hockey/nhl 20260115" "basketball/nba 20260115" "soccer/eng.1 20260117" "soccer/esp.1 20260117" "soccer/eng.1 20250315"; do
-            set -- $X
-            printf "%s %s: " $1 $2
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/$1/scoreboard?dates=$2" | python3 -c "
+          for L in basketball/nba hockey/nhl hockey/mens-college-hockey; do
+            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?dates=20261112" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin); ev=d.get('events',[])
-          wo=[e for e in ev if [o for o in (e['competitions'][0].get('odds') or []) if o]]
-          print(len(ev),'events',len(wo),'with odds')
-          if wo: print(json.dumps(wo[0]['competitions'][0]['odds'][0])[:900])"
+          d=json.load(sys.stdin)
+          for e in d.get('events',[]):
+              c=e['competitions'][0]; t={x['homeAway']:x for x in c['competitors']}
+              h,a=t['home'],t['away']
+              rec=lambda x: ','.join(r.get('summary','') for r in (x.get('records') or [])[:3])
+              o=[x for x in (c.get('odds') or []) if x]
+              od=''
+              if o:
+                  o=o[0]; ml=o.get('moneyline') or {}
+                  def g(k,s):
+                      try: return ml[k][s]['odds']
+                      except: return None
+                  od='ML %s/%s spread %s total %s | %s'%(g('home','close') or g('home','open'),g('away','close') or g('away','open'),o.get('spread'),o.get('overUnder'),o.get('details'))
+              print('$L', e['date'], a['team']['displayName'],'('+rec(a)+') @',h['team']['displayName'],'('+rec(h)+')', c['status']['type']['shortDetail'], od)
+          "
           done
           } > probe_out.txt 2>&1
           cat probe_out.txt
