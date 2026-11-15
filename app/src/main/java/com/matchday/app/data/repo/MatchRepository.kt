@@ -676,6 +676,9 @@ class MatchRepository(
             ar = EspnMapper.lastFive(summary.lastFiveGames, entity.awayId, item.awayTeam)
             if (hr.size >= 3) homeStats = homeStats?.copy(recent = hr)
             if (ar.size >= 3) awayStats = awayStats?.copy(recent = ar)
+            // No league table (national teams, cups): use the last results.
+            if (homeStats == null) homeStats = EspnMapper.statsFromRecent(item.homeTeam, entity.homeId, item.homeCrest, hr)
+            if (awayStats == null) awayStats = EspnMapper.statsFromRecent(item.awayTeam, entity.awayId, item.awayCrest, ar)
             h2h = EspnMapper.headToHead(summary.seasonseries, entity.homeId, item.homeTeam)
             injuries = injuriesOf(summary, item, entity.homeId, entity.awayId)
         }
@@ -722,6 +725,10 @@ class MatchRepository(
             val ar = EspnMapper.lastFive(summary.lastFiveGames, entity?.awayId, item.awayTeam)
             if (hr.size >= 3) homeStats = homeStats?.copy(recent = hr)
             if (ar.size >= 3) awayStats = awayStats?.copy(recent = ar)
+            if (comp.sport == SportType.FOOTBALL) {
+                if (homeStats == null) homeStats = EspnMapper.statsFromRecent(item.homeTeam, entity?.homeId, item.homeCrest, hr)
+                if (awayStats == null) awayStats = EspnMapper.statsFromRecent(item.awayTeam, entity?.awayId, item.awayCrest, ar)
+            }
             val h2h = EspnMapper.headToHead(summary.seasonseries, entity?.homeId, item.homeTeam)
             val lineups = EspnMapper.lineups(summary.rosters)
             val injuries = injuriesOf(summary, item, entity?.homeId, entity?.awayId)

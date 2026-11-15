@@ -203,6 +203,23 @@ object EspnMapper {
         )
     }
 
+    /**
+     * Team figures from the last results alone (national teams, cups: no league table).
+     * Only real results are used; null with fewer than 3 games.
+     */
+    fun statsFromRecent(name: String, teamId: String?, logo: String?, recent: List<RecentResult>): TeamStats? {
+        if (recent.size < 3) return null
+        val h = recent.filter { it.home }; val a = recent.filter { !it.home }
+        return TeamStats(
+            name = name, teamId = teamId, crest = logo, position = null,
+            played = recent.size, goalsFor = recent.sumOf { it.goalsFor }, goalsAgainst = recent.sumOf { it.goalsAgainst },
+            points = recent.sumOf { if (it.goalsFor > it.goalsAgainst) 3 else if (it.goalsFor == it.goalsAgainst) 1 else 0 },
+            homePlayed = h.size, homeFor = h.sumOf { it.goalsFor }, homeAgainst = h.sumOf { it.goalsAgainst },
+            awayPlayed = a.size, awayFor = a.sumOf { it.goalsFor }, awayAgainst = a.sumOf { it.goalsAgainst },
+            recent = recent,
+        )
+    }
+
     fun lastFive(list: List<ELastFive>, teamId: String?, name: String): List<RecentResult> {
         val block = list.firstOrNull { teamId != null && it.team?.id == teamId }
             ?: list.firstOrNull { TeamMatcher.same(it.team?.displayName ?: "", name) }
