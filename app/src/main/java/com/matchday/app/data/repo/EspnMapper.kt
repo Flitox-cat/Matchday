@@ -213,7 +213,7 @@ object EspnMapper {
         return TeamStats(
             name = name, teamId = teamId, crest = logo, position = null,
             played = recent.size, goalsFor = recent.sumOf { it.goalsFor }, goalsAgainst = recent.sumOf { it.goalsAgainst },
-            points = recent.sumOf { if (it.goalsFor > it.goalsAgainst) 3 else if (it.goalsFor == it.goalsAgainst) 1 else 0 },
+            points = recent.fold(0) { acc, r -> acc + if (r.goalsFor > r.goalsAgainst) 3 else if (r.goalsFor == r.goalsAgainst) 1 else 0 },
             homePlayed = h.size, homeFor = h.sumOf { it.goalsFor }, homeAgainst = h.sumOf { it.goalsAgainst },
             awayPlayed = a.size, awayFor = a.sumOf { it.goalsFor }, awayAgainst = a.sumOf { it.goalsAgainst },
             recent = recent,
