@@ -29,24 +29,27 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in basketball/nba hockey/nhl hockey/mens-college-hockey; do
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/$L/scoreboard?dates=20261112" | python3 -c "
+          for L in caf.nations_qual uefa.nations fifa.worldq.uefa uefa.euroq fifa.friendly fifa.worldq.caf; do
+            for D in 20261115 20261116 20261117; do
+            printf "%s %s: " $L $D
+            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/$L/scoreboard?dates=$D" > /tmp/b.json
+            python3 -c "
+          import json
+          d=json.load(open('/tmp/b.json')); ev=d.get('events',[])
+          wo=sum(1 for e in ev if [o for o in (e['competitions'][0].get('odds') or []) if o])
+          pre=sum(1 for e in ev if e['status']['type']['state']=='pre')
+          print(len(ev),'events',pre,'pre',wo,'odds', [e['name'][:30] for e in ev[:3]])
+          ids=[e['id'] for e in ev if e['status']['type']['state']=='pre']
+          open('/tmp/id','w').write(ids[0] if ids else '')"
+            id=$(cat /tmp/id)
+            if [ -n "$id" ] && [ "$D" = 20261115 ]; then
+              curl -s --compressed -m 25 "https://site.api.espn.com/apis/site/v2/sports/soccer/$L/summary?event=$id" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin)
-          for e in d.get('events',[]):
-              c=e['competitions'][0]; t={x['homeAway']:x for x in c['competitors']}
-              h,a=t['home'],t['away']
-              rec=lambda x: ','.join(r.get('summary','') for r in (x.get('records') or [])[:3])
-              o=[x for x in (c.get('odds') or []) if x]
-              od=''
-              if o:
-                  o=o[0]; ml=o.get('moneyline') or {}
-                  def g(k,s):
-                      try: return ml[k][s]['odds']
-                      except: return None
-                  od='ML %s/%s spread %s total %s | %s'%(g('home','close') or g('home','open'),g('away','close') or g('away','open'),o.get('spread'),o.get('overUnder'),o.get('details'))
-              print('$L', e['date'], a['team']['displayName'],'('+rec(a)+') @',h['team']['displayName'],'('+rec(h)+')', c['status']['type']['shortDetail'], od)
-          "
+          d=json.load(sys.stdin); lf=d.get('lastFiveGames') or []
+          print('   summary keys', [k for k in d.keys()][:20]); print('   lastFive', [(x.get('team',{}).get('displayName'), len(x.get('events',[])), [ (e.get('gameResult'), e.get('score'), e.get('leagueName')) for e in x.get('events',[])][:5]) for x in lf])
+          print('   h2h', len(d.get('headToHeadGames') or []), 'odds', len(d.get('odds') or []), 'pickcenter', len(d.get('pickcenter') or []))"
+            fi
+            done
           done
           } > probe_out.txt 2>&1
           cat probe_out.txt
