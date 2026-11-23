@@ -141,6 +141,8 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: M
         }
         val prediction = state.extras.prediction ?: item.prediction
         val odds = item.odds
+        // Long-press any text (team names, picks) to select and copy it.
+        androidx.compose.foundation.text.selection.SelectionContainer {
         LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
             item { Header(item, state, onTeam) { vm.toggleTeam(it) } }
             when (tab) {
@@ -170,6 +172,7 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: M
                     }
                 }
             }
+        }
         }
     }
 }

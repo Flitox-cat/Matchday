@@ -121,6 +121,8 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
     val zone = LocalZone.current
     val day = st.days.firstOrNull { it.date == st.selected }
     val startToday = java.time.LocalDate.now(DailyPicksRepository.QATAR).plusDays(st.range.startDay).toString()
+    // Long-press any text (team names, picks) to select and copy it.
+    androidx.compose.foundation.text.selection.SelectionContainer {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -213,6 +215,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                 )
             }
         }
+    }
     }
 }
 
