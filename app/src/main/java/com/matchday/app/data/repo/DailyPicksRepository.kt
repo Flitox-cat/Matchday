@@ -138,7 +138,7 @@ class DailyPicksRepository(
         val now = System.currentTimeMillis()
         // Slips built while fixtures or odds were still missing are rebuilt (every 30 min, until a leg starts).
         val notStarted = ex != null && ex.slips.flatMap { it.legs }.none { it.kickoff <= now }
-        val incomplete = ex != null && notStarted && (ex.rules < 4 ||
+        val incomplete = ex != null && notStarted && (ex.rules < 5 ||
             ex.slips.any { it.legs.size < it.size } && now - ex.createdAt > 30 * 60_000L)
         if (ex != null && !incomplete) return ex
         return build(range, sports, force = ex != null)
@@ -206,17 +206,20 @@ class DailyPicksRepository(
             val priced = mk.markets.any { it.odds != null }
             val t0 = mk.markets.filter { pk -> settleableOther(pk.market, tennis) && priced(pk, 0.58, -0.03) && !(even && pk.market in setOf("ML", "REG")) }
             val t1 = mk.markets.filter { pk -> settleableOther(pk.market, tennis) && priced(pk, 0.55, -0.06) && !(nearEven && pk.market in setOf("ML", "REG")) }
-            val t2 = if (priced) emptyList() else mk.markets.filter { pk ->
-                pk.probability >= 0.60 && pk.probability < 0.95 && settleableOther(pk.market, tennis) && !(nearEven && pk.market == "ML")
+            // Safe selections the free feed has no price for (also offered when the match has some prices).
+            val t2 = mk.markets.filter { pk ->
+                pk.odds == null && pk.probability >= 0.60 && pk.probability < 0.95 && settleableOther(pk.market, tennis) && !(nearEven && pk.market == "ML")
             }
-            val (tier, picks) = listOf(0 to t0, 1 to t1, 2 to t2).firstOrNull { it.second.isNotEmpty() } ?: (0 to emptyList())
-            if (picks.isEmpty()) {
+            val pricedCands = (if (t0.isNotEmpty()) t0.map { it to 0 } else t1.map { it to 1 })
+            val all = pricedCands + t2.map { it to 2 }
+            val picks = all.map { it.first }
+            if (all.isEmpty()) {
                 if (!priced) { noOdds++; skip("Odds unavailable and no clear favourite") }
                 else skip(if (even) "Evenly matched" else "No market with a fair real price above $MIN_ODDS")
                 continue
             }
             if (!priced) noOdds++
-            pool += m to picks.map { Cand(it, otherReason(it, why), tier) }
+            pool += m to all.map { (pk, t) -> Cand(pk, otherReason(pk, why), t) }
         }
         for ((m, a) in analysed) {
             val p = a?.prediction
@@ -233,11 +236,15 @@ class DailyPicksRepository(
             val modelOnlyOk = p.model != null && p.completeness >= 0.15
             val t0 = if (!strict) emptyList() else mk.markets.filter { pk -> pk.market in FOOTBALL_SAFE && priced(pk, 0.58, -0.03) && !(gap < 0.12 && pk.market in setOf("1X2", "DNB")) }
             val t1 = if (!relaxedOk) emptyList() else mk.markets.filter { pk -> pk.market in FOOTBALL_SAFE && priced(pk, 0.55, -0.06) && !(gap < 0.06 && pk.market in setOf("1X2", "DNB")) }
-            val t2 = if (priced || !(relaxedOk || modelOnlyOk)) emptyList() else mk.markets.filter { pk ->
-                pk.probability >= 0.60 && pk.probability < 0.95 && pk.market in FOOTBALL_SAFE && !(gap < 0.06 && pk.market in setOf("1X2", "DNB"))
+            // Safe selections the free feed has no price for (double chance, other goal lines...). Offered for
+            // every match, so each match can contribute its safest likely outcome, not only the priced ones.
+            val t2 = if (!(relaxedOk || modelOnlyOk)) emptyList() else mk.markets.filter { pk ->
+                pk.odds == null && pk.probability >= 0.60 && pk.probability < 0.95 && pk.market in FOOTBALL_SAFE && !(gap < 0.06 && pk.market in setOf("1X2", "DNB"))
             }
-            val (tier, picks) = listOf(0 to t0, 1 to t1, 2 to t2).firstOrNull { it.second.isNotEmpty() } ?: (0 to emptyList())
-            if (picks.isEmpty()) {
+            val pricedCands = (if (t0.isNotEmpty()) t0.map { it to 0 } else t1.map { it to 1 })
+            val all = pricedCands + t2.map { it to 2 }
+            val picks = all.map { it.first }
+            if (all.isEmpty()) {
                 skip(when {
                     !hasMarket && p.model == null -> "Too little team data"
                     dis > 0.25 -> "Model and bookmaker disagree strongly"
@@ -248,7 +255,7 @@ class DailyPicksRepository(
                 continue
             }
             if (!priced) noOdds++
-            pool += m to picks.map { Cand(it, reason(m, it, a), tier) }
+            pool += m to all.map { (pk, t) -> Cand(pk, reason(m, pk, a), t) }
         }
 
         val total = candidates.size
@@ -260,7 +267,7 @@ class DailyPicksRepository(
                     // Safest selection first (highest probability), not the biggest price.
                     .maxWithOrNull(compareBy<Cand> { it.pick.probability }.thenBy { it.pick.odds ?: 0.0 })?.let { c ->
                         val pk = c.pick
-                        val pre = when (c.tier) { 2 -> "Odds unavailable - model prediction only · "; 1 -> "Relaxed filter (limited data or value) · "; else -> "" }
+                        val pre = when (c.tier) { 2 -> "No price for this selection in the free feed - estimate only · "; 1 -> "Relaxed filter (limited data or value) · "; else -> "" }
                         SlipLeg(m.id, m.kickoff, m.competition.title, m.homeTeam, m.awayTeam, pk.market, pk.sel, pk.point, pk.label,
                             pk.probability, pk.odds, if (pk.odds != null) pk.bookmaker ?: "Bookmaker" else "No bookmaker price yet", pre + c.why,
                             sport = m.competition.sport.name, relaxed = c.tier > 0) to c.tier
@@ -280,7 +287,7 @@ class DailyPicksRepository(
             )
             Slip(size, minP, legs, (listOfNotNull(note) + extra).joinToString(" ").ifBlank { null })
         }
-        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 4)
+        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 5)
         lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk) } + result) }
         return result
     }
