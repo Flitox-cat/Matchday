@@ -71,6 +71,7 @@ class PickTracker(private val cache: JsonCache) {
             market == "BTTS" -> "BTTS"
             market == "TT" -> "Individual team goals"
             market.startsWith("1H") -> "First-half markets"
+            market == "RT" || market == "DCT" || market == "RB" -> "Combined bets"
             else -> "Other markets"
         }
 
@@ -101,6 +102,21 @@ class PickTracker(private val cache: JsonCache) {
             "WEH" -> if (hh == null || ha == null) Outcome.UNKNOWN else {
                 val sh = hg - hh; val sa = ag - ha
                 b(if (sel == "HOME") hh > ha || sh > sa else ha > hh || sa > sh)
+            }
+            "RT", "DCT", "RB" -> {
+                val r = sel.substringBefore("|"); val s2 = sel.substringAfter("|")
+                val res = when (r) {
+                    "HOME" -> hg > ag; "AWAY" -> ag > hg; "DRAW" -> hg == ag
+                    "1X" -> hg >= ag; "X2" -> ag >= hg; "12" -> hg != ag
+                    else -> null
+                }
+                val second = when {
+                    m == "RB" -> (hg > 0 && ag > 0) == (s2 == "YES")
+                    pt == null -> null
+                    s2 == "OVER" -> hg + ag > pt
+                    else -> hg + ag < pt
+                }
+                if (res == null || second == null) Outcome.UNKNOWN else b(res && second)
             }
             else -> Outcome.UNKNOWN // first/last goal: no goal timeline in the free feed
         }

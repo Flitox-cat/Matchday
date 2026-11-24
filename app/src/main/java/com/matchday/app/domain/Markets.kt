@@ -18,6 +18,7 @@ enum class MarketFamily(val label: String) {
     SETS("Sets"),
     GAMES("Games"),
     PLAYER_GAMES("Player games"),
+    COMBO("Combined bets (result + goals)"),
     OTHER("Other markets"),
 }
 
@@ -301,6 +302,40 @@ object MarketEngine {
             val shift = beforeProbs?.get("$m|$sel|${point ?: ""}")?.let { model - it }
             val (o, src) = price(m, sel, point)
             list += MarketPick(fam, m, sel, point, label, prob, model, emp?.first, emp?.second ?: 0, o, src, shift, emptyList(), emptyList())
+        }
+
+        // Combined bets (bet builder): result or double chance + total goals, result + BTTS.
+        // The goals model gives how goals are spread inside each result; that share is applied to the
+        // result probability shown above, so a combo is always below both of its parts.
+        if (p != null && p.final.draw != null) {
+            val f = p.final; val d = f.draw!!
+            val gr = Grid(lh, la)
+            data class R(val code: String, val label: String, val test: (Int, Int) -> Boolean, val prob: Double)
+            val results = listOf(
+                R("HOME", "$home to win", { x, y -> x > y }, f.home),
+                R("DRAW", "Draw", { x, y -> x == y }, d),
+                R("AWAY", "$away to win", { x, y -> y > x }, f.away),
+            )
+            val doubles = listOf(
+                R("1X", "$home or draw", { x, y -> x >= y }, f.home + d),
+                R("X2", "$away or draw", { x, y -> y >= x }, f.away + d),
+                R("12", "$home or $away (no draw)", { x, y -> x != y }, f.home + f.away),
+            )
+            fun joint(r: R, extra: (Int, Int) -> Boolean): Double {
+                val base = gr.p(r.test)
+                return if (base <= 1e-9) 0.0 else (gr.p { x, y -> r.test(x, y) && extra(x, y) } / base * r.prob).coerceIn(0.0, 1.0)
+            }
+            fun combo(m: String, r: R, sel: String, point: Double?, label: String, prob: Double) {
+                list += MarketPick(MarketFamily.COMBO, m, "${r.code}|$sel", point, label, prob, prob, null, 0, null, null, null, emptyList(), emptyList())
+            }
+            for ((m, set) in listOf("RT" to results, "DCT" to doubles)) for (r in set) for (line in listOf(1.5, 2.5, 3.5)) {
+                combo(m, r, "OVER", line, "${r.label} & Over ${fmt(line)} goals", joint(r) { x, y -> x + y > line })
+                combo(m, r, "UNDER", line, "${r.label} & Under ${fmt(line)} goals", joint(r) { x, y -> x + y < line })
+            }
+            for (r in results) {
+                combo("RB", r, "YES", null, "${r.label} & both teams to score", joint(r) { x, y -> x > 0 && y > 0 })
+                combo("RB", r, "NO", null, "${r.label} & not both teams to score", joint(r) { x, y -> !(x > 0 && y > 0) })
+            }
         }
 
         // Asian handicap: only for lines the bookmaker actually offers.
