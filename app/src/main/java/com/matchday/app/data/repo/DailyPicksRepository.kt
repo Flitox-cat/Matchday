@@ -139,7 +139,9 @@ class DailyPicksRepository(
         val now = System.currentTimeMillis()
         // Slips built while fixtures or odds were still missing are rebuilt (every 30 min, until a leg starts).
         val notStarted = ex != null && ex.slips.flatMap { it.legs }.none { it.kickoff <= now }
-        val incomplete = ex != null && notStarted && (ex.rules < 5 ||
+        // Tomorrow slips built with today's matches in them (rules < 6) are rebuilt with tomorrow's only.
+        if (ex != null && range == PickRange.TOMORROW && ex.rules < 6) return build(range, sports, leagues, force = true)
+        val incomplete = ex != null && notStarted && (ex.rules < 6 ||
             ex.slips.any { it.legs.size < it.size } && now - ex.createdAt > 30 * 60_000L)
         if (ex != null && !incomplete) return ex
         return build(range, sports, leagues, force = ex != null)
@@ -148,8 +150,8 @@ class DailyPicksRepository(
     /** Time window of a range (Qatar time). */
     private fun window(range: PickRange, now: Long): Pair<Long, Long> {
         val first = LocalDate.now(QATAR).plusDays(range.startDay)
-        // Tomorrow also takes today's matches that haven't started yet (Qatar time).
-        val from = if (range == PickRange.TOMORROW) now + 15 * 60_000L else maxOf(now + 15 * 60_000L, first.atStartOfDay(QATAR).toInstant().toEpochMilli())
+        // Each range starts on its own Qatar day: Tomorrow = tomorrow's matches only.
+        val from = maxOf(now + 15 * 60_000L, first.atStartOfDay(QATAR).toInstant().toEpochMilli())
         // Today also takes the night's late games (until 06:00 Qatar), when European evenings end.
         val until = first.plusDays(range.days).atStartOfDay(QATAR).toInstant().toEpochMilli() + if (range == PickRange.TODAY) 6 * 3_600_000L else 0L
         return from to until
@@ -172,7 +174,8 @@ class DailyPicksRepository(
         val sk = sports.map { it.name }.sorted()
         val existing = all().firstOrNull { it.date == d && it.range == range.name && it.sports.sorted() == sk && it.leagues.toSet() == leagues }
         val now = System.currentTimeMillis()
-        if (existing != null && (!force || existing.slips.flatMap { it.legs }.any { it.kickoff <= now })) return existing
+        val redoTomorrow = range == PickRange.TOMORROW && existing != null && existing.rules < 6
+        if (existing != null && !redoTomorrow && (!force || existing.slips.flatMap { it.legs }.any { it.kickoff <= now })) return existing
 
         val (from, until) = window(range, now)
         val candidates = matches.observeMatchesOnce().filter {
@@ -304,8 +307,8 @@ class DailyPicksRepository(
             )
             Slip(size, minP, legs, (listOfNotNull(note) + extra).joinToString(" ").ifBlank { null })
         }
-        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 5, leagues = leagues.sorted())
-        lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk) } + result) }
+        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 6, leagues = leagues.sorted())
+        lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk && it.leagues.toSet() == leagues) } + result) }
         return result
     }
 

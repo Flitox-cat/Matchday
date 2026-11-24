@@ -196,7 +196,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                     Text("${st.range.label} · ${st.sports.joinToString(" ") { it.emoji }}: ${day.analysed} matches analysed · ${day.qualified} passed the risk filter", style = MaterialTheme.typography.titleSmall)
                     if (PickSport.TENNIS in st.sports) Text("Tennis: ranking and real odds only - surface records, head-to-head, recent form and fatigue aren't in the free feed, so they aren't used.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (st.range == PickRange.TOMORROW) Text("Tomorrow also includes today's matches that haven't started yet (Qatar time).",
+                    if (st.range == PickRange.TOMORROW) Text("Tomorrow's matches only (Qatar time).",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (st.range.startDay > 0 || st.range.days > 1) Text("Games further ahead often have no bookmaker odds published yet. Those legs show the model prediction marked \"Odds unavailable\" (never an invented price); rebuild later for real prices.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
