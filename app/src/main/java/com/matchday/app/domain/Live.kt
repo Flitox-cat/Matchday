@@ -167,6 +167,8 @@ object LiveEngine {
 
     private class Out(val prices: List<BookPrice>?, val source: String?) {
         val list = mutableListOf<MarketPick>()
+        /** Family listed and recommended first (first-half markets while the first half is being played). */
+        var priority: MarketFamily? = null
         fun add(fam: MarketFamily, m: String, sel: String, point: Double?, label: String, p: Double, ev: List<String>) {
             if (p.isNaN()) return
             val o = prices?.firstOrNull { it.market == m && it.sel == sel && (point == null || it.point == point) }?.price
@@ -174,12 +176,15 @@ object LiveEngine {
                 if (o == null) listOf("Market unavailable: no current live 1xBet price for this selection.") else emptyList())
         }
         fun ranked(): Pair<List<MarketPick>, List<MarketPick>> {
-            val all = list.sortedByDescending { it.probability }
+            val all = list.sortedWith(compareByDescending<MarketPick> { it.family == priority }.thenByDescending { it.probability })
             val r = all.filter { it.probability < MarketEngine.MAX_PROB && (it.odds == null || it.odds >= 1.05) }
             val top = mutableListOf<MarketPick>()
             for (c in r) {
-                if (c.probability < 0.65 || top.size == 3) break
-                if (top.any { it.family == c.family }) continue
+                if (top.size == 3) break
+                if (c.probability < 0.65) { if (c.family == priority) continue else break }
+                // Priority family: one pick per kind of bet (result, goals, BTTS...); others: one per family.
+                if (c.family == priority) { if (top.any { it.market == c.market }) continue }
+                else if (top.any { it.family == c.family }) continue
                 if ((c.edge ?: 0.0) < -0.08) continue
                 top += c
             }
@@ -315,6 +320,32 @@ object LiveEngine {
             o.add(MarketFamily.FIRST_HALF, "1H", "H1_HOME", null, "Half-time: ${item.homeTeam}", htH, ev)
             o.add(MarketFamily.FIRST_HALF, "1H", "H1_DRAW", null, "Half-time: Draw", htD, ev)
             o.add(MarketFamily.FIRST_HALF, "1H", "H1_AWAY", null, "Half-time: ${item.awayTeam}", 1 - htH - htD, ev)
+            // More first-half markets, shown first while the first half is being played.
+            val htA = 1 - htH - htD
+            o.add(MarketFamily.FIRST_HALF, "1HDC", "1X", null, "Half-time double chance: ${item.homeTeam} or draw", htH + htD, ev)
+            o.add(MarketFamily.FIRST_HALF, "1HDC", "X2", null, "Half-time double chance: ${item.awayTeam} or draw", htA + htD, ev)
+            o.add(MarketFamily.FIRST_HALF, "1HDC", "12", null, "Half-time double chance: no draw", htH + htA, ev)
+            fun h1(pred: (Int, Int) -> Boolean): Double { var t = 0.0; for (x in g1.indices) for (y in g1[x].indices) if (pred(hg + x, ag + y)) t += g1[x][y]; return t }
+            val ev1 = ev + "First half: ${f1(max(0.0, 45 - minute))} minutes + stoppage left; expected first-half goals still to come ${f1((lh + la) * h1)}."
+            listOf(0.5, 1.5, 2.5, 3.5).filter { it > cur }.forEach { line ->
+                val over = h1 { x, y -> x + y > line }
+                o.add(MarketFamily.FIRST_HALF, "1HOU", "OVER", line, "1st half Over ${fmt(line)} goals", over, ev1)
+                o.add(MarketFamily.FIRST_HALF, "1HOU", "UNDER", line, "1st half Under ${fmt(line)} goals", 1 - over, ev1)
+            }
+            val moreH1 = 1 - g1[0][0]
+            o.add(MarketFamily.FIRST_HALF, "1HMORE", "YES", null, "Another goal before half-time", moreH1, ev1)
+            o.add(MarketFamily.FIRST_HALF, "1HMORE", "NO", null, "No more goals before half-time", g1[0][0], ev1)
+            for ((name, home, have) in listOf(Triple(item.homeTeam, true, hg), Triple(item.awayTeam, false, ag))) {
+                if (have == 0) {
+                    val sc = h1 { x, y -> (if (home) x else y) > 0 }
+                    o.add(MarketFamily.FIRST_HALF, "1HTT", "${if (home) "HOME" else "AWAY"}_OVER", 0.5, "$name to score in the 1st half", sc, ev1)
+                    o.add(MarketFamily.FIRST_HALF, "1HTT", "${if (home) "HOME" else "AWAY"}_UNDER", 0.5, "$name not to score in the 1st half", 1 - sc, ev1)
+                }
+            }
+            val b1 = h1 { x, y -> x > 0 && y > 0 }
+            o.add(MarketFamily.FIRST_HALF, "1HBTTS", "YES", null, "1st half: both teams to score", b1, ev1)
+            o.add(MarketFamily.FIRST_HALF, "1HBTTS", "NO", null, "1st half: not both teams to score", 1 - b1, ev1)
+            o.priority = MarketFamily.FIRST_HALF
         }
 
         // Corners and cards: projected from this match's own rate so far (needs 15+ minutes).

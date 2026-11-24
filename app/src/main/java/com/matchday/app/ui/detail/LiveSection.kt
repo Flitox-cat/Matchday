@@ -99,6 +99,8 @@ fun LiveTab(item: MatchItem, live: MatchDetailViewModel.LiveUi, state: DetailUiS
             Text("Source: ESPN live feed.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
         Banner(a.oddsNote, color = if (a.markets.any { it.odds != null }) Accent.Green else Accent.Orange)
+        if (a.markets.firstOrNull()?.family == com.matchday.app.domain.MarketFamily.FIRST_HALF)
+            Banner("First half in play: first-half bets (half-time result, 1st-half goals, BTTS...) are listed first, then the full-match bets.", color = Accent.Blue)
         // Ranked live markets: reuse the ranking card
         TopSelectionsCard(
             item,
