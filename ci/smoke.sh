@@ -103,6 +103,8 @@ picks_flow() {
   tap_text "Daily Picks"; sleep 40; check "$1 daily picks"; screen_texts
   tap_text "Select all"; sleep 120; check "$1 daily picks all sports"; screen_texts
   tap_text "Tomorrow"; sleep 150; check "$1 daily picks tomorrow"; screen_texts
+  tap_prefix "League:"; sleep 3; screen_texts
+  tap_text "Champions League" || true; sleep 1; tap_text "Done"; sleep 120; check "$1 daily picks league filter"; screen_texts
   for i in 1 2 3 4 5 6 7 8; do adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts; done
 }
 

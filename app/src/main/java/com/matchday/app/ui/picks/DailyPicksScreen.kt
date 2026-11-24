@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +64,8 @@ data class PicksUi(
     val building: Boolean = false,
     val loaded: Boolean = false,
     val error: String? = null,
+    val leagues: Set<String> = emptySet(),                                   // chosen competition keys (empty = all)
+    val available: List<Pair<com.matchday.app.domain.Competition, Int>> = emptyList(),   // leagues with matches in the range
 )
 
 class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
@@ -72,7 +75,8 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
     init {
         viewModelScope.launch {
             val saved = runCatching { c.settings.current().pickSports }.getOrDefault(setOf("FOOTBALL"))
-            _state.value = _state.value.copy(sports = saved.mapNotNull { n -> PickSport.values().firstOrNull { it.name == n } }.toSet().ifEmpty { setOf(PickSport.FOOTBALL) })
+            val lg = runCatching { c.settings.current().pickLeagues }.getOrDefault(emptySet())
+            _state.value = _state.value.copy(sports = saved.mapNotNull { n -> PickSport.values().firstOrNull { it.name == n } }.toSet().ifEmpty { setOf(PickSport.FOOTBALL) }, leagues = lg)
             load(rebuild = false)
         }
     }
@@ -91,6 +95,14 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
         load(rebuild = false)
     }
 
+    /** League filter (empty = all leagues); remembered. */
+    fun setLeagues(keys: Set<String>) {
+        if (keys == _state.value.leagues) return
+        _state.value = _state.value.copy(leagues = keys)
+        viewModelScope.launch { runCatching { c.settings.setPickLeagues(keys) } }
+        load(rebuild = false)
+    }
+
     fun select(d: String) { _state.value = _state.value.copy(selected = d) }
 
     fun setRange(r: PickRange) {
@@ -101,16 +113,18 @@ class DailyPicksViewModel(private val c: AppContainer) : ViewModel() {
     fun load(rebuild: Boolean) {
         val r = _state.value.range
         val sp = _state.value.sports
+        val lg = _state.value.leagues
         viewModelScope.launch {
             _state.value = _state.value.copy(building = true)
             withContext(Dispatchers.IO) {
                 runCatching { c.dailyPicks.settle(c.matches.recentFinished()) }
-                runCatching { if (rebuild) c.dailyPicks.build(r, sp, force = true) else c.dailyPicks.todayOrBuild(r, sp) }
+                runCatching { if (rebuild) c.dailyPicks.build(r, sp, lg, force = true) else c.dailyPicks.todayOrBuild(r, sp, lg) }
             }.exceptionOrNull()?.let { e -> android.util.Log.w("DailyPicks", "build failed", e) }
             val err = if (sp.isEmpty()) null else runCatching { withContext(Dispatchers.IO) { if (c.matches.observeMatchesOnce().isEmpty()) "No fixtures saved yet: open Home and pull to refresh, then come back." else null } }.getOrNull()
             val key = sp.map { it.name }.sorted()
-            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name && it.sports.sorted() == key }
-            _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true, error = err)
+            val all = withContext(Dispatchers.IO) { c.dailyPicks.all() }.filter { it.range == r.name && it.sports.sorted() == key && it.leagues.toSet() == lg }
+            val avail = runCatching { withContext(Dispatchers.IO) { c.dailyPicks.leaguesFor(r, sp) } }.getOrDefault(emptyList())
+            _state.value = _state.value.copy(days = all.sortedByDescending { it.date }, building = false, loaded = true, error = err, available = avail)
         }
     }
 }
@@ -150,6 +164,7 @@ fun DailyPicksScreen(vm: DailyPicksViewModel, onMatch: (String) -> Unit) {
                 }
             }
         }
+        item { LeagueFilter(st, vm) }
         if (st.building) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = Accent.Purple) }
         if (st.days.isNotEmpty()) {
             item {
@@ -278,4 +293,48 @@ private fun LegRow(leg: SlipLeg, zone: java.time.ZoneId, onMatch: (String) -> Un
         Text("${leg.bookmaker} · ${leg.reason}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
         if (leg.void) Text("Void: refunded or not settleable from the free feed.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** "League: All leagues ▾" button and a checklist of the leagues that have matches in the chosen period. */
+@Composable
+private fun LeagueFilter(st: PicksUi, vm: DailyPicksViewModel) {
+    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val names = st.available.associate { it.first.key to it.first.title }
+    val label = when {
+        st.leagues.isEmpty() -> "All leagues"
+        st.leagues.size == 1 -> names[st.leagues.first()] ?: com.matchday.app.domain.Catalog.find(st.leagues.first()).title
+        else -> "${st.leagues.size} leagues"
+    }
+    OutlinedButton(onClick = { open = true }, enabled = !st.building, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text("League: $label  ▾")
+    }
+    if (!open) return
+    var chosen by androidx.compose.runtime.remember(st.leagues) { androidx.compose.runtime.mutableStateOf(st.leagues) }
+    // Saved leagues with no match in this period stay listed so they can be removed.
+    val rows = st.available.map { Triple(it.first.key, it.first.title, it.second) } +
+        st.leagues.filter { k -> st.available.none { it.first.key == k } }.map { Triple(it, com.matchday.app.domain.Catalog.find(it).title, 0) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text("Choose leagues") },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                item {
+                    Row(Modifier.fillMaxWidth().clickable { chosen = emptySet() }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = chosen.isEmpty(), onCheckedChange = { chosen = emptySet() })
+                        Text("All leagues", fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (rows.isEmpty()) item { Text("No upcoming matches for the chosen sports in this period.", style = MaterialTheme.typography.bodySmall) }
+                items(rows) { (k, t, n) ->
+                    Row(Modifier.fillMaxWidth().clickable { chosen = if (k in chosen) chosen - k else chosen + k }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = k in chosen, onCheckedChange = { chosen = if (k in chosen) chosen - k else chosen + k })
+                        Text(t, modifier = Modifier.weight(1f), maxLines = 2)
+                        Text(if (n > 0) "$n" else "–", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { open = false; vm.setLeagues(chosen) }) { Text("Done") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { open = false }) { Text("Cancel") } },
+    )
 }

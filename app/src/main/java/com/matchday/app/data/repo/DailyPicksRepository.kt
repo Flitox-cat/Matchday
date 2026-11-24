@@ -85,6 +85,7 @@ data class DailySlips(
     val excluded: Map<String, Int>,   // reason -> number of matches left out
     val slips: List<Slip>,
     val rules: Int = 1,               // selection rules version (2 = safest selection per match)
+    val leagues: List<String> = emptyList(),   // competition keys chosen (empty = all leagues)
 )
 
 /**
@@ -132,35 +133,51 @@ class DailyPicksRepository(
     }
 
     /** Slips for [range] starting today, building them the first time they're opened that day. */
-    suspend fun todayOrBuild(range: PickRange = PickRange.TODAY, sports: Set<PickSport> = setOf(PickSport.FOOTBALL)): DailySlips? {
+    suspend fun todayOrBuild(range: PickRange = PickRange.TODAY, sports: Set<PickSport> = setOf(PickSport.FOOTBALL), leagues: Set<String> = emptySet()): DailySlips? {
         val d = startDate(range)
-        val ex = all().firstOrNull { it.date == d && it.range == range.name && it.sports.toSet() == sports.map { x -> x.name }.toSet() }
+        val ex = all().firstOrNull { it.date == d && it.range == range.name && it.sports.toSet() == sports.map { x -> x.name }.toSet() && it.leagues.toSet() == leagues }
         val now = System.currentTimeMillis()
         // Slips built while fixtures or odds were still missing are rebuilt (every 30 min, until a leg starts).
         val notStarted = ex != null && ex.slips.flatMap { it.legs }.none { it.kickoff <= now }
         val incomplete = ex != null && notStarted && (ex.rules < 5 ||
             ex.slips.any { it.legs.size < it.size } && now - ex.createdAt > 30 * 60_000L)
         if (ex != null && !incomplete) return ex
-        return build(range, sports, force = ex != null)
+        return build(range, sports, leagues, force = ex != null)
     }
 
-    private fun startDate(r: PickRange) = LocalDate.now(QATAR).plusDays(r.startDay).toString()
-
-    /** Builds (or rebuilds, while no leg has started) the slips for [range]. */
-    suspend fun build(range: PickRange = PickRange.TODAY, sports: Set<PickSport> = setOf(PickSport.FOOTBALL), force: Boolean): DailySlips? {
-        val d = startDate(range)
-        val sk = sports.map { it.name }.sorted()
-        val existing = all().firstOrNull { it.date == d && it.range == range.name && it.sports.sorted() == sk }
-        val now = System.currentTimeMillis()
-        if (existing != null && (!force || existing.slips.flatMap { it.legs }.any { it.kickoff <= now })) return existing
-
+    /** Time window of a range (Qatar time). */
+    private fun window(range: PickRange, now: Long): Pair<Long, Long> {
         val first = LocalDate.now(QATAR).plusDays(range.startDay)
         // Tomorrow also takes today's matches that haven't started yet (Qatar time).
         val from = if (range == PickRange.TOMORROW) now + 15 * 60_000L else maxOf(now + 15 * 60_000L, first.atStartOfDay(QATAR).toInstant().toEpochMilli())
         // Today also takes the night's late games (until 06:00 Qatar), when European evenings end.
         val until = first.plusDays(range.days).atStartOfDay(QATAR).toInstant().toEpochMilli() + if (range == PickRange.TODAY) 6 * 3_600_000L else 0L
+        return from to until
+    }
+
+    /** Competitions with upcoming matches in [range] for [sports], with their number of matches (most first). */
+    suspend fun leaguesFor(range: PickRange, sports: Set<PickSport>): List<Pair<com.matchday.app.domain.Competition, Int>> {
+        val (from, until) = window(range, System.currentTimeMillis())
+        return matches.observeMatchesOnce().filter {
+            PickSport.of(it.competition.sport) in sports && it.status == MatchStatus.UPCOMING && it.kickoff in from until until &&
+                it.competition.sport in setOf(SportType.FOOTBALL, SportType.BASKETBALL, SportType.HOCKEY, SportType.TENNIS)
+        }.groupBy { it.competition.key }.map { (_, l) -> l.first().competition to l.size }.sortedWith(compareByDescending<Pair<com.matchday.app.domain.Competition, Int>> { it.second }.thenBy { it.first.title })
+    }
+
+    private fun startDate(r: PickRange) = LocalDate.now(QATAR).plusDays(r.startDay).toString()
+
+    /** Builds (or rebuilds, while no leg has started) the slips for [range]. */
+    suspend fun build(range: PickRange = PickRange.TODAY, sports: Set<PickSport> = setOf(PickSport.FOOTBALL), leagues: Set<String> = emptySet(), force: Boolean): DailySlips? {
+        val d = startDate(range)
+        val sk = sports.map { it.name }.sorted()
+        val existing = all().firstOrNull { it.date == d && it.range == range.name && it.sports.sorted() == sk && it.leagues.toSet() == leagues }
+        val now = System.currentTimeMillis()
+        if (existing != null && (!force || existing.slips.flatMap { it.legs }.any { it.kickoff <= now })) return existing
+
+        val (from, until) = window(range, now)
         val candidates = matches.observeMatchesOnce().filter {
             PickSport.of(it.competition.sport) in sports && it.status == MatchStatus.UPCOMING && it.kickoff in from until until &&
+                (leagues.isEmpty() || it.competition.key in leagues) &&
                 it.competition.sport in setOf(SportType.FOOTBALL, SportType.BASKETBALL, SportType.HOCKEY, SportType.TENNIS)
         }
         val excluded = HashMap<String, Int>()
@@ -287,7 +304,7 @@ class DailyPicksRepository(
             )
             Slip(size, minP, legs, (listOfNotNull(note) + extra).joinToString(" ").ifBlank { null })
         }
-        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 5)
+        val result = DailySlips(d, range.name, sk, now, analysed.size + otherAnalysed.size, pool.size, excluded, slips, rules = 5, leagues = leagues.sorted())
         lock.withLock { write(read().filter { !(it.date == d && it.range == range.name && it.sports.sorted() == sk) } + result) }
         return result
     }

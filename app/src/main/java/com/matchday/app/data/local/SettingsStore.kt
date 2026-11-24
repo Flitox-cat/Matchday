@@ -37,6 +37,7 @@ data class AppSettings(
     val apiFootballKey: String = "",      // optional API-Football key (injuries, line-ups)
     val apiFootballPausedUntil: Long = 0,
     val apiFootballRemaining: Int = -1,
+    val pickLeagues: Set<String> = emptySet(),          // Daily Picks league filter (competition keys; empty = all)
     val pickSports: Set<String> = setOf("FOOTBALL"),   // Daily Picks sport filter: FOOTBALL NBA TENNIS OTHER   // from the x-ratelimit-requests-remaining header (remaining today)
 )
 
@@ -63,6 +64,7 @@ class SettingsStore(private val context: Context) {
         val afPaused = longPreferencesKey("af_paused_until")
         val afRemaining = intPreferencesKey("af_remaining")
         val pickSports = stringSetPreferencesKey("pick_sports")
+        val pickLeagues = stringSetPreferencesKey("pick_leagues")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p -> p.toSettings() }
@@ -91,6 +93,7 @@ class SettingsStore(private val context: Context) {
         apiFootballPausedUntil = this[K.afPaused] ?: 0L,
         apiFootballRemaining = this[K.afRemaining] ?: -1,
         pickSports = this[K.pickSports]?.takeIf { it.isNotEmpty() } ?: setOf("FOOTBALL"),
+        pickLeagues = this[K.pickLeagues] ?: emptySet(),
     )
 
     suspend fun toggleLeague(key: String, enabled: Boolean) {
@@ -136,6 +139,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setFootballDataKey(v: String) { context.dataStore.edit { it[K.fdKey] = v.trim(); it[K.fdPaused] = 0L } }
     suspend fun setFootballDataPausedUntil(v: Long) { context.dataStore.edit { it[K.fdPaused] = v } }
     suspend fun setApiFootballKey(v: String) { context.dataStore.edit { it[K.afKey] = v.trim(); it[K.afPaused] = 0L; it[K.afRemaining] = -1 } }
+    suspend fun setPickLeagues(v: Set<String>) { context.dataStore.edit { it[K.pickLeagues] = v } }
     suspend fun setPickSports(v: Set<String>) { context.dataStore.edit { it[K.pickSports] = v.ifEmpty { setOf("FOOTBALL") } } }
     suspend fun setApiFootballPausedUntil(v: Long) { context.dataStore.edit { it[K.afPaused] = v } }
     suspend fun setApiFootballRemaining(v: Int) { context.dataStore.edit { it[K.afRemaining] = v } }
