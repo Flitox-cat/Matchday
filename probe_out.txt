@@ -1,24 +1,15 @@
-caf.nations_qual 20261115: 0 events 0 pre 0 odds []
-caf.nations_qual 20261116: 6 events 6 pre 0 odds ['Cameroon at Namibia', 'Senegal at Sudan', 'Equatorial Guinea at Zimbabwe']
-caf.nations_qual 20261117: 18 events 18 pre 0 odds ['Zambia at Burundi', 'Mozambique at Ethiopia', 'Gabon at Lesotho']
-uefa.nations 20261115: 8 events 8 pre 7 odds ['Montenegro at Cyprus', 'Armenia at Latvia', 'Albania at Belarus']
-   summary keys ['boxscore', 'format', 'gameInfo', 'lastFiveGames', 'leaders', 'broadcasts', 'pickcenter', 'odds', 'hasOdds', 'news', 'rosters', 'header', 'wallclockAvailable', 'meta', 'seasonseries', 'standings']
-   lastFive [('Cyprus', 5, [('L', '2-1', 'UEFA Nations League'), ('D', '0-0', 'UEFA Nations League'), ('W', '2-0', 'UEFA Nations League'), ('W', '2-1', 'UEFA Nations League'), ('D', '1-1', 'UEFA Nations League')]), ('Montenegro', 5, [('W', '2-1', 'UEFA Nations League'), ('W', '3-2', 'UEFA Nations League'), ('W', '2-1', 'UEFA Nations League'), ('D', '0-0', 'UEFA Nations League'), ('W', '2-1', 'UEFA Nations League')])]
-   h2h 0 odds 1 pickcenter 1
-uefa.nations 20261116: 10 events 10 pre 10 odds ['Moldova at Faroe Islands', 'Slovakia at Kazakhstan', 'Bulgaria at Estonia']
-uefa.nations 20261117: 8 events 8 pre 8 odds ['Romania at Bosnia-Herzegovina', 'Norway at Denmark', 'Northern Ireland at Hungary']
-fifa.worldq.uefa 20261115: 0 events 0 pre 0 odds []
-fifa.worldq.uefa 20261116: 0 events 0 pre 0 odds []
-fifa.worldq.uefa 20261117: 0 events 0 pre 0 odds []
-uefa.euroq 20261115: 0 events 0 pre 0 odds []
-uefa.euroq 20261116: 0 events 0 pre 0 odds []
-uefa.euroq 20261117: 0 events 0 pre 0 odds []
-fifa.friendly 20261115: 1 events 1 pre 0 odds ['Eswatini at Suriname']
-   summary keys ['boxscore', 'format', 'gameInfo', 'lastFiveGames', 'broadcasts', 'pickcenter', 'hasOdds', 'rosters', 'news', 'header', 'wallclockAvailable', 'meta', 'standings']
-   lastFive [('Suriname', 5, [('W', '3-2', 'Concacaf Nations League'), ('W', '2-1', 'Concacaf Nations League'), ('D', '0-0', 'Concacaf Nations League'), ('L', '1-0', 'Concacaf Nations League'), ('D', '0-0', 'International Friendly')]), ('Eswatini', 5, [('D', '2-2', 'FIFA World Cup Qualifying - CAF'), ('L', '3-0', 'FIFA World Cup Qualifying - CAF'), ('L', '2-0', 'Africa Cup of Nations Qualifying'), ('L', '2-1', 'Africa Cup of Nations Qualifying'), ('D', '1-1', 'International Friendly')])]
-   h2h 0 odds 0 pickcenter 0
-fifa.friendly 20261116: 1 events 1 pre 0 odds ['Azerbaijan at Andorra']
-fifa.friendly 20261117: 18 events 18 pre 0 odds ['Cook Islands at Tahiti', 'Yemen at Malaysia', 'Brazil at Singapore']
-fifa.worldq.caf 20261115: 0 events 0 pre 0 odds []
-fifa.worldq.caf 20261116: 0 events 0 pre 0 odds []
-fifa.worldq.caf 20261117: 0 events 0 pre 0 odds []
+uefa.europa 18 [("Hapoel Be'er at Besiktas", 'FT'), ('AFC Bournemouth at Celta Vigo', 'FT'), ('Bayer Leverkusen at Dinamo Zag', 'FT')]
+rosters 2
+players 23
+Dogan Alemdar True G [('appearances', '1'), ('foulsCommitted', '0'), ('foulsSuffered', '0'), ('ownGoals', '0'), ('redCards', '0'), ('subIns', '0'), ('yellowCards', '0'), ('goalsConceded', '1'), ('saves', '8'), ('shotsFaced', '0'), ('goalAssists', '0'), ('shotsOnTarget', '0'), ('totalGoals', '0'), ('totalShots', '0')]
+Emir Han Topcu True CD-L [('appearances', '1'), ('foulsCommitted', '0'), ('foulsSuffered', '1'), ('ownGoals', '0'), ('redCards', '0'), ('subIns', '0'), ('yellowCards', '0'), ('goalsConceded', '0'), ('shotsFaced', '0'), ('goalAssists', '0'), ('offsides', '0'), ('shotsOnTarget', '0'), ('totalGoals', '0'), ('totalShots', '0')]
+Tiago Djaló True CD-R [('appearances', '1'), ('foulsCommitted', '1'), ('foulsSuffered', '1'), ('ownGoals', '0'), ('redCards', '0'), ('subIns', '0'), ('yellowCards', '0'), ('goalsConceded', '1'), ('shotsFaced', '0'), ('goalAssists', '0'), ('offsides', '0'), ('shotsOnTarget', '0'), ('totalGoals', '0'), ('totalShots', '0')]
+keyEvents 48 commentary 134
+   Kickoff  [] 
+   Start Delay 11' [] 
+   End Delay 12' [] 
+   Yellow Card 22' ['Salih Özcan'] Salih Özcan (Besiktas) is shown the yellow card.
+  C Lineups are announced and players are warming up.
+  C First Half begins.
+  C Foul by Muhammad Abu Rumi (Hapoel Be'er Sheva).
+  C Emirhan Topçu (Besiktas) wins a free kick in the defensive half.
