@@ -37,6 +37,9 @@ data class PlayerWatch(
     val home: Boolean, val team: String, val name: String, val role: String, val minutesOn: Int,
     val foulsSoFar: Int, val fouledSoFar: Int, val shots: Int, val onTarget: Int, val goals: Int, val booked: Boolean,
     val pFoul: Double, val pFouled: Double, val pScore: Double,
+    // Expected counts for the rest of the match (used for the player-market list).
+    val lGoal: Double = 0.0, val lAssist: Double = 0.0, val lFoul: Double = 0.0, val lFouled: Double = 0.0, val lCard: Double = 0.0,
+    val photo: String? = null, val number: String? = null,
 )
 
 data class LiveStats(
@@ -197,6 +200,8 @@ data class LiveAnalysis(
     val unavailable: List<String>,
     val oddsNote: String,
     val playerWatch: List<PlayerWatch> = emptyList(),   // football: per-player rest-of-match chances
+    val remainingGoals: Double = 0.0,                    // football: expected goals still to come (both teams)
+    val goalsSoFar: Int = 0,
 )
 
 /** Pre-match context the live engine starts from (from the existing analysis). */
@@ -270,45 +275,7 @@ object LiveEngine {
     private fun playerWatch(s: LiveStats?, minute: Double, remaining: Double, lh: Double, la: Double): List<PlayerWatch> {
         val fs = s?.footballers?.filter { it.onPitch } ?: return emptyList()
         if (fs.isEmpty()) return emptyList()
-        fun role(p: String): String = p.uppercase().let { x ->
-            when {
-                x == "G" || x == "GK" -> "GK"
-                x.startsWith("CD") || x.startsWith("CB") || x == "D" -> "CB"
-                x in setOf("LB", "RB", "LWB", "RWB") -> "FB"
-                x.startsWith("DM") || x == "CDM" -> "DM"
-                x.startsWith("AM") || x == "CAM" -> "AM"
-                x in setOf("LW", "RW", "LF", "RF", "LM", "RM") -> "W"
-                x == "F" || x.startsWith("CF") || x == "ST" || x == "FW" -> "ST"
-                x.startsWith("CM") || x == "M" -> "CM"
-                else -> "CM"
-            }
-        }
-        // Typical rates per 90 minutes by role (fouls committed, fouls suffered) and share of team goals.
-        val foulC = mapOf("GK" to 0.05, "CB" to 1.0, "FB" to 1.0, "DM" to 1.6, "CM" to 1.2, "AM" to 1.1, "W" to 1.0, "ST" to 1.3)
-        val foulS = mapOf("GK" to 0.1, "CB" to 0.6, "FB" to 0.9, "DM" to 1.1, "CM" to 1.2, "AM" to 1.7, "W" to 1.6, "ST" to 1.4)
-        val goalW = mapOf("GK" to 0.0, "CB" to 0.04, "FB" to 0.03, "DM" to 0.03, "CM" to 0.06, "AM" to 0.12, "W" to 0.14, "ST" to 0.30)
-        val all = s.footballers
-        fun tempo(home: Boolean): Double {   // team's fouls so far vs a typical ~11 per 90
-            val done = all.filter { it.home == home }.sumOf { it.foulsCommitted }
-            val exp = 11.0 * minute / 90.0
-            return ((done + 5.5) / (exp + 5.5)).coerceIn(0.6, 1.6)
-        }
-        val tH = tempo(true); val tA = tempo(false)
-        fun weight(p: LiveFootballer) = (goalW[role(p.pos)] ?: 0.05) * (1 + 0.5 * p.shots + 1.0 * p.onTarget)
-        val wSum = mapOf(true to fs.filter { it.home }.sumOf { weight(it) }, false to fs.filter { !it.home }.sumOf { weight(it) })
-        return fs.map { p ->
-            val r = role(p.pos)
-            val on = (if (p.subMinute != null) minute - p.subMinute else if (p.pos == "SUB") minute / 2 else minute).coerceAtLeast(1.0)
-            val g = on / 90.0
-            val rc = ((foulC[r] ?: 1.0) * 1.0 + p.foulsCommitted) / (1.0 + g) * Math.sqrt(if (p.home) tH else tA)
-            val rs = ((foulS[r] ?: 1.0) * 1.0 + p.foulsSuffered) / (1.0 + g)
-            val teamGoals = (if (p.home) lh else la) * 0.92      // ~8% of goals are own goals
-            val share = (wSum[p.home] ?: 0.0).let { if (it <= 0) 0.0 else weight(p) / it }
-            PlayerWatch(
-                p.home, p.team, p.name, r, on.toInt(), p.foulsCommitted, p.foulsSuffered, p.shots, p.onTarget, p.goals, p.yellow > 0,
-                pFoul = 1 - exp(-rc * remaining / 90.0), pFouled = 1 - exp(-rs * remaining / 90.0), pScore = 1 - exp(-teamGoals * share),
-            )
-        }
+        return PlayerModel.live(s.footballers, minute, remaining, lh, la)
     }
 
     /** Football minute from the status text ("67'", "45'+2'", "HT"). */
@@ -546,7 +513,7 @@ object LiveEngine {
                 "Corner and card lines are estimates from this match's own rates; 1xBet corner/card prices aren't available through the odds source (Market unavailable).",
             ),
             oddsNote(prices),
-            playerWatch = watch,
+            playerWatch = watch, remainingGoals = lh + la, goalsSoFar = hg + ag,
         )
     }
 

@@ -138,6 +138,8 @@ run_pass() {
   # Open a match: tap the kick-off label of the first card ("Today 22:45" / "Tomorrow 01:00").
   open_card
   sleep 8; check "$label open match"; screen_texts
+  tap_text "Players"; sleep 6; check "$label match tab Players"; screen_texts
+  adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   tap_text "Markets"; sleep 10; check "$label match tab Markets"; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
   adb shell input swipe 500 1600 500 500 300; sleep 2; screen_texts
