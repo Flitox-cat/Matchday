@@ -29,30 +29,18 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          for L in uefa.europa uefa.europa.conf; do
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/$L/scoreboard" > /tmp/b.json
-            python3 -c "
-          import json; d=json.load(open('/tmp/b.json'))
-          ev=[e for e in d.get('events',[]) if e['status']['type']['state'] in ('in','post')]
-          print('$L', len(d.get('events',[])), [(e['name'][:30], e['status']['type']['shortDetail']) for e in ev[:3]])
-          open('/tmp/id','w').write(ev[0]['id'] if ev else '')"
-            id=$(cat /tmp/id); [ -z "$id" ] && continue
-            curl -s --compressed -m 25 "https://site.api.espn.com/apis/site/v2/sports/soccer/$L/summary?event=$id" | python3 -c "
+          curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/scoreboard" > /tmp/b.json
+          id=$(python3 -c "
+          import json; d=json.load(open('/tmp/b.json')); print([e['id'] for e in d['events'] if e['status']['type']['state']=='post'][0])")
+          curl -s --compressed -m 25 "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/summary?event=$id" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin); r=d.get('rosters') or []
-          print('rosters', len(r))
-          for t in r[:1]:
-              pl=t.get('roster') or []
-              print('players', len(pl))
-              for p in pl[:3]:
-                  print(p.get('athlete',{}).get('displayName'), p.get('starter'), p.get('position',{}).get('abbreviation'), [(s.get('name'), s.get('displayValue')) for s in (p.get('stats') or [])])
-          ke=d.get('keyEvents') or d.get('commentary') or []
-          print('keyEvents', len(d.get('keyEvents') or []), 'commentary', len(d.get('commentary') or []))
-          for k in (d.get('keyEvents') or [])[:4]: print('  ', k.get('type',{}).get('text'), k.get('clock',{}).get('displayValue'), [x.get('athlete',{}).get('displayName') for x in (k.get('participants') or [])], (k.get('text') or '')[:80])
-          for k in (d.get('commentary') or [])[:4]: print('  C', (k.get('text') or '')[:100])
+          d=json.load(sys.stdin)
+          for t in d['rosters']:
+              print('TEAM', t.get('team',{}).get('displayName'), t.get('homeAway'), list(t.keys()))
+              for p in t['roster']:
+                  st={s['name']:s['displayValue'] for s in p.get('stats') or []}
+                  print('  ', p.get('athlete',{}).get('displayName'), 'starter',p.get('starter'), 'in',p.get('subbedIn'), 'out',p.get('subbedOut'), p.get('position',{}).get('abbreviation'), p.get('formationPlace'), 'fc',st.get('foulsCommitted'),'fs',st.get('foulsSuffered'),'sh',st.get('totalShots'),'sot',st.get('shotsOnTarget'),'g',st.get('totalGoals'), 'yc', st.get('yellowCards'), [k for k in p.keys() if k not in ('athlete','stats','position')])
           "
-            break
-          done
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
