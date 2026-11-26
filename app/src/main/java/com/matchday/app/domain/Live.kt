@@ -24,6 +24,21 @@ data class LiveEvent(val clock: String?, val type: String, val team: String?, va
 
 data class LivePlayer(val team: String, val name: String, val line: String, val points: Double?)
 
+/** One football player's live box-score line (ESPN rosters). */
+data class LiveFootballer(
+    val home: Boolean, val team: String, val name: String, val pos: String,
+    val onPitch: Boolean, val subMinute: Int?,          // minute he came on (subs), null for starters
+    val foulsCommitted: Int, val foulsSuffered: Int, val shots: Int, val onTarget: Int, val goals: Int,
+    val yellow: Int, val red: Int,
+)
+
+/** Rest-of-match chances for one player on the pitch. */
+data class PlayerWatch(
+    val home: Boolean, val team: String, val name: String, val role: String, val minutesOn: Int,
+    val foulsSoFar: Int, val fouledSoFar: Int, val shots: Int, val onTarget: Int, val goals: Int, val booked: Boolean,
+    val pFoul: Double, val pFouled: Double, val pScore: Double,
+)
+
 data class LiveStats(
     val fetchedAt: Long,
     val rows: List<LiveStatRow>,
@@ -34,6 +49,7 @@ data class LiveStats(
     val clock: String?,
     val detail: String?,
     val players: List<LivePlayer>,
+    val footballers: List<LiveFootballer> = emptyList(),
 ) {
     fun stat(vararg keys: String): Pair<Double, Double>? {
         for (k in keys) {
@@ -118,11 +134,45 @@ data class LiveStats(
                     players += LivePlayer(teamName, name, line, st.getOrNull(ptsIdx)?.toDoubleOrNull())
                 }
             }
+            // Football rosters: per-player fouls, shots, goals, cards and who is on the pitch.
+            val subMinutes = HashMap<String, Int>()
+            raw["keyEvents"].arr().orEmpty().forEach { e ->
+                val o = e.obj() ?: return@forEach
+                if (o["type"].obj()?.get("text").str()?.contains("Substitution", true) != true) return@forEach
+                val min = o["clock"].obj()?.get("displayValue").str()?.takeWhile { it.isDigit() }?.toIntOrNull() ?: return@forEach
+                o["participants"].arr().orEmpty().firstOrNull().obj()?.get("athlete").obj()?.get("displayName").str()?.let { subMinutes[it] = min }
+            }
+            val footballers = mutableListOf<LiveFootballer>()
+            raw["rosters"].arr().orEmpty().forEach { tr ->
+                val t = tr.obj() ?: return@forEach
+                val isHome = t["homeAway"].str() == "home"
+                val teamName = t["team"].obj()?.get("displayName").str() ?: if (isHome) home else away
+                val roster = t["roster"].arr().orEmpty().mapNotNull { it.obj() }
+                val posById = roster.associate { (it["athlete"].obj()?.get("id").str() ?: "") to (it["position"].obj()?.get("abbreviation").str() ?: "") }
+                roster.forEach { p ->
+                    val name = p["athlete"].obj()?.get("displayName").str() ?: return@forEach
+                    val st = p["stats"].arr().orEmpty().mapNotNull { it.obj() }.associate { (it["name"].str() ?: "") to (it["value"].dbl() ?: it["displayValue"].dbl() ?: 0.0) }
+                    fun n(k: String) = st[k]?.toInt() ?: 0
+                    val starter = p["starter"].str() == "true"; val sIn = p["subbedIn"].str() == "true"; val sOut = p["subbedOut"].str() == "true"
+                    var pos = p["position"].obj()?.get("abbreviation").str() ?: ""
+                    if (pos == "SUB") {
+                        val forId = p["subbedInFor"].obj()?.get("athlete").obj()?.get("id").str()
+                        pos = forId?.let { posById[it] }?.takeIf { it != "SUB" } ?: "SUB"
+                    }
+                    footballers += LiveFootballer(
+                        isHome, teamName, name, pos, onPitch = (starter || sIn) && !sOut && n("redCards") == 0,
+                        subMinute = if (sIn) subMinutes[name] else null,
+                        foulsCommitted = n("foulsCommitted"), foulsSuffered = n("foulsSuffered"), shots = n("totalShots"),
+                        onTarget = n("shotsOnTarget"), goals = n("totalGoals"), yellow = n("yellowCards"), red = n("redCards"),
+                    )
+                }
+            }
             return LiveStats(
                 fetchedAt = now, rows = rows, events = events, homeLines = lines("home"), awayLines = lines("away"),
                 period = status?.get("period").dbl()?.toInt(), clock = status?.get("displayClock").str(),
                 detail = status?.get("type").obj()?.get("detail").str(),
                 players = players.sortedByDescending { it.points ?: -1.0 }.take(10),
+                footballers = footballers,
             )
         }
     }
@@ -146,6 +196,7 @@ data class LiveAnalysis(
     val noBet: String?,
     val unavailable: List<String>,
     val oddsNote: String,
+    val playerWatch: List<PlayerWatch> = emptyList(),   // football: per-player rest-of-match chances
 )
 
 /** Pre-match context the live engine starts from (from the existing analysis). */
@@ -207,6 +258,58 @@ object LiveEngine {
     private fun oddsNote(prices: List<BookPrice>?) =
         if (prices == null) "1xBet live odds unavailable (load them in the Odds tab with your odds key). Probabilities are model estimates."
         else "Live 1xBet odds attached where 1xBet offers the market; other selections show \"Market unavailable\"."
+
+    /**
+     * Player watch: chance that each player on the pitch commits a foul, is fouled, or scores before
+     * the end. Each player starts from the typical rate for his position (per 90 minutes) and moves
+     * toward what he has actually done in this match the longer he has played. Fouls are also scaled by
+     * how many fouls his team has committed so far. Scoring shares his team's projected remaining goals
+     * by position and by his shots / shots on target in this match. No season player data is used
+     * (the free feed has none live), so these are estimates.
+     */
+    private fun playerWatch(s: LiveStats?, minute: Double, remaining: Double, lh: Double, la: Double): List<PlayerWatch> {
+        val fs = s?.footballers?.filter { it.onPitch } ?: return emptyList()
+        if (fs.isEmpty()) return emptyList()
+        fun role(p: String): String = p.uppercase().let { x ->
+            when {
+                x == "G" || x == "GK" -> "GK"
+                x.startsWith("CD") || x.startsWith("CB") || x == "D" -> "CB"
+                x in setOf("LB", "RB", "LWB", "RWB") -> "FB"
+                x.startsWith("DM") || x == "CDM" -> "DM"
+                x.startsWith("AM") || x == "CAM" -> "AM"
+                x in setOf("LW", "RW", "LF", "RF", "LM", "RM") -> "W"
+                x == "F" || x.startsWith("CF") || x == "ST" || x == "FW" -> "ST"
+                x.startsWith("CM") || x == "M" -> "CM"
+                else -> "CM"
+            }
+        }
+        // Typical rates per 90 minutes by role (fouls committed, fouls suffered) and share of team goals.
+        val foulC = mapOf("GK" to 0.05, "CB" to 1.0, "FB" to 1.0, "DM" to 1.6, "CM" to 1.2, "AM" to 1.1, "W" to 1.0, "ST" to 1.3)
+        val foulS = mapOf("GK" to 0.1, "CB" to 0.6, "FB" to 0.9, "DM" to 1.1, "CM" to 1.2, "AM" to 1.7, "W" to 1.6, "ST" to 1.4)
+        val goalW = mapOf("GK" to 0.0, "CB" to 0.04, "FB" to 0.03, "DM" to 0.03, "CM" to 0.06, "AM" to 0.12, "W" to 0.14, "ST" to 0.30)
+        val all = s.footballers
+        fun tempo(home: Boolean): Double {   // team's fouls so far vs a typical ~11 per 90
+            val done = all.filter { it.home == home }.sumOf { it.foulsCommitted }
+            val exp = 11.0 * minute / 90.0
+            return ((done + 5.5) / (exp + 5.5)).coerceIn(0.6, 1.6)
+        }
+        val tH = tempo(true); val tA = tempo(false)
+        fun weight(p: LiveFootballer) = (goalW[role(p.pos)] ?: 0.05) * (1 + 0.5 * p.shots + 1.0 * p.onTarget)
+        val wSum = mapOf(true to fs.filter { it.home }.sumOf { weight(it) }, false to fs.filter { !it.home }.sumOf { weight(it) })
+        return fs.map { p ->
+            val r = role(p.pos)
+            val on = (if (p.subMinute != null) minute - p.subMinute else if (p.pos == "SUB") minute / 2 else minute).coerceAtLeast(1.0)
+            val g = on / 90.0
+            val rc = ((foulC[r] ?: 1.0) * 1.0 + p.foulsCommitted) / (1.0 + g) * Math.sqrt(if (p.home) tH else tA)
+            val rs = ((foulS[r] ?: 1.0) * 1.0 + p.foulsSuffered) / (1.0 + g)
+            val teamGoals = (if (p.home) lh else la) * 0.92      // ~8% of goals are own goals
+            val share = (wSum[p.home] ?: 0.0).let { if (it <= 0) 0.0 else weight(p) / it }
+            PlayerWatch(
+                p.home, p.team, p.name, r, on.toInt(), p.foulsCommitted, p.foulsSuffered, p.shots, p.onTarget, p.goals, p.yellow > 0,
+                pFoul = 1 - exp(-rc * remaining / 90.0), pFouled = 1 - exp(-rs * remaining / 90.0), pScore = 1 - exp(-teamGoals * share),
+            )
+        }
+    }
 
     /** Football minute from the status text ("67'", "45'+2'", "HT"). */
     private fun footballMinute(detail: String?, clock: String?): Double? {
@@ -432,16 +535,18 @@ object LiveEngine {
         intel += "Another goal is ${if (any >= 0.65) "likely" else if (any >= 0.4) "about as likely as not" else "unlikely"} (${pct(any)})."
         intel += "Penalty probability: not estimated (no reliable model or data in free sources)."
 
+        val watch = playerWatch(s, minute, remaining, lh, la)
         val (all, top) = o.ranked()
         return LiveAnalysis(
             System.currentTimeMillis(), "$hg-$ag", "${minute.toInt()}'", actual, proj, intel, all, top,
             if (top.isEmpty()) "No live selection reaches 65% at a fair price: no bet recommended right now." else null,
             listOf(
-                "Penalty, player (goalscorer, shots, assists, cards) and booking-points markets: no free data or odds source.",
+                "Player markets (scorer, fouls): model estimates in Player watch only - no bookmaker prices from the free sources. Penalties and booking points: not available.",
                 "Expected goals (xG), big chances, dangerous attacks: not published by the free feed.",
                 "Corner and card lines are estimates from this match's own rates; 1xBet corner/card prices aren't available through the odds source (Market unavailable).",
             ),
             oddsNote(prices),
+            playerWatch = watch,
         )
     }
 

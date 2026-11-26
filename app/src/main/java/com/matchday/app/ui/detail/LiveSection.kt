@@ -1,6 +1,7 @@
 package com.matchday.app.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -98,6 +99,7 @@ fun LiveTab(item: MatchItem, live: MatchDetailViewModel.LiveUi, state: DetailUiS
             }
             Text("Source: ESPN live feed.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
+        if (a.playerWatch.isNotEmpty()) PlayerWatchCard(a.playerWatch)
         Banner(a.oddsNote, color = if (a.markets.any { it.odds != null }) Accent.Green else Accent.Orange)
         if (a.markets.firstOrNull()?.family == com.matchday.app.domain.MarketFamily.FIRST_HALF)
             Banner("First half in play: first-half bets (half-time result, 1st-half goals, BTTS...) are listed first, then the full-match bets.", color = Accent.Blue)
@@ -122,5 +124,49 @@ private fun StatLine(label: String, value: String, note: String?) {
             Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.3f))
         }
         note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+/** Player watch: who is most likely to commit a foul, be fouled or score before the end. */
+@Composable
+private fun PlayerWatchCard(list: List<com.matchday.app.domain.PlayerWatch>) {
+    var all by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    fun pc(x: Double) = "${Math.round(x * 100)}%"
+    InfoCard {
+        Text("Player watch (rest of the match)", style = MaterialTheme.typography.titleMedium)
+        Text("Players on the pitch now. Each starts from the usual rate for his position and moves toward what he has done in this match; " +
+            "fouls also follow how often his team is fouling today, goals follow his team's projected goals and his shots. Estimates, not bookmaker odds.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        @Composable
+        fun section(title: String, color: androidx.compose.ui.graphics.Color, sel: (com.matchday.app.domain.PlayerWatch) -> Double, sofar: (com.matchday.app.domain.PlayerWatch) -> String) {
+            Spacer(Modifier.height(8.dp))
+            Text(title, style = MaterialTheme.typography.titleSmall, color = color)
+            list.sortedByDescending(sel).take(5).forEach { p ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${p.name} (${p.role})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text("${p.team} · ${sofar(p)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                    }
+                    Text(pc(sel(p)), style = MaterialTheme.typography.titleSmall, color = color)
+                }
+            }
+        }
+        section("Most likely to commit a foul", Accent.Orange, { it.pFoul }) { "${it.foulsSoFar} fouls so far${if (it.booked) " · booked" else ""} · ${it.minutesOn}' played" }
+        section("Most likely to be fouled", Accent.Blue, { it.pFouled }) { "fouled ${it.fouledSoFar} times so far · ${it.minutesOn}' played" }
+        section("Most likely to score", Accent.Green, { it.pScore }) { "${it.goals} goals · ${it.shots} shots, ${it.onTarget} on target" }
+        Text(if (all) "Hide all players" else "Show all ${list.size} players", style = MaterialTheme.typography.labelMedium, color = Accent.Purple,
+            modifier = Modifier.padding(top = 8.dp).clickable { all = !all })
+        if (all) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                Text("Player", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                listOf("Foul", "Fouled", "Score").forEach { Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(52.dp), textAlign = TextAlign.End) }
+            }
+            list.sortedWith(compareBy({ !it.home }, { it.name })).forEach { p ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    Text("${p.name} · ${p.role}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 2)
+                    listOf(p.pFoul, p.pFouled, p.pScore).forEach { Text(pc(it), style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(52.dp), textAlign = TextAlign.End) }
+                }
+            }
+        }
     }
 }
