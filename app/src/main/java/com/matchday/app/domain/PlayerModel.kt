@@ -47,7 +47,17 @@ object PlayerModel {
     private fun p1(l: Double) = 1 - exp(-l)
 
     /** Live: players on the pitch, rest of the match. */
-    fun live(all: List<LiveFootballer>, minute: Double, remaining: Double, lh: Double, la: Double): List<PlayerWatch> {
+    /**
+     * Starting rate per 90 for a player: his position's usual rate, moved toward his own average over
+     * his last games (weight n / (n + 3)), when his game log is known.
+     */
+    private fun own(prior: Double, games: List<PlayerGame>?, pick: (PlayerGame) -> Int): Double {
+        val g = games.orEmpty()
+        if (g.isEmpty()) return prior
+        return (prior * 3 + g.sumOf(pick)) / (3 + g.size)
+    }
+
+    fun live(all: List<LiveFootballer>, minute: Double, remaining: Double, lh: Double, la: Double, logs: Map<String, PlayerLog> = emptyMap()): List<PlayerWatch> {
         val fs = all.filter { it.onPitch }
         fun tempo(home: Boolean): Double {   // team's fouls so far vs a typical ~11 per 90
             val done = all.filter { it.home == home }.sumOf { it.foulsCommitted }
@@ -64,22 +74,24 @@ object PlayerModel {
             val on = (if (p.subMinute != null) minute - p.subMinute else if (p.pos == "SUB") minute / 2 else minute).coerceAtLeast(1.0)
             val g = on / 90.0
             val t = if (p.home) tH else tA
-            val rc = ((FOUL_C[r] ?: 1.0) + p.foulsCommitted) / (1.0 + g) * sqrt(t)
-            val rs = ((FOUL_S[r] ?: 1.0) + p.foulsSuffered) / (1.0 + g)
+            val hist = p.athleteId?.let { logs[it]?.games }
+            val rc = (own(FOUL_C[r] ?: 1.0, hist) { it.fouls } + p.foulsCommitted) / (1.0 + g) * sqrt(t)
+            val rs = (own(FOUL_S[r] ?: 1.0, hist) { it.fouled } + p.foulsSuffered) / (1.0 + g)
             val team = if (p.home) lh else la
             val lG = team * OWN_GOALS * (gSum[p.home]?.takeIf { it > 0 }?.let { gW(p) / it } ?: 0.0)
             val lA = team * ASSISTED * (aSum[p.home]?.takeIf { it > 0 }?.let { aW(p) / it } ?: 0.0)
             val lF = rc * rem; val lS = rs * rem
-            val lC = if (p.yellow > 0) 0.0 else (CARD[r] ?: 0.15) * (1 + 0.3 * p.foulsCommitted) * sqrt(t) * rem
+            val lC = if (p.yellow > 0) 0.0 else own(CARD[r] ?: 0.15, hist) { it.yellow } * (1 + 0.3 * p.foulsCommitted) * sqrt(t) * rem
             PlayerWatch(
                 p.home, p.team, p.name, r, on.toInt(), p.foulsCommitted, p.foulsSuffered, p.shots, p.onTarget, p.goals, p.yellow > 0,
                 pFoul = p1(lF), pFouled = p1(lS), pScore = p1(lG), lGoal = lG, lAssist = lA, lFoul = lF, lFouled = lS, lCard = lC,
+                athleteId = p.athleteId,
             )
         }
     }
 
     /** Before kick-off: confirmed starting line-ups and the pre-match expected goals. */
-    fun prematch(lineups: List<LineupInfo>, home: String, away: String, lh: Double, la: Double): List<PlayerWatch> {
+    fun prematch(lineups: List<LineupInfo>, home: String, away: String, lh: Double, la: Double, logs: Map<String, PlayerLog> = emptyMap()): List<PlayerWatch> {
         if (lineups.isEmpty()) return emptyList()
         val sides = lineups.mapIndexed { i, l ->
             val isHome = when {
@@ -100,11 +112,13 @@ object PlayerModel {
                 val mins = if (r == "GK") 1.0 else 0.85      // outfield starters are often subbed late
                 val lG = team * OWN_GOALS * 0.88 * (if (gSum > 0) (GOAL_W[r] ?: 0.05) / gSum else 0.0)   // ~12% of goals come from subs
                 val lA = team * ASSISTED * 0.88 * (if (aSum > 0) (ASSIST_W[r] ?: 0.05) / aSum else 0.0)
-                val lF = (FOUL_C[r] ?: 1.0) * mins; val lS = (FOUL_S[r] ?: 1.0) * mins; val lC = (CARD[r] ?: 0.15) * mins
+                val hist = pl.id?.let { logs[it]?.games }
+                val lF = own(FOUL_C[r] ?: 1.0, hist) { it.fouls } * mins; val lS = own(FOUL_S[r] ?: 1.0, hist) { it.fouled } * mins
+                val lC = own(CARD[r] ?: 0.15, hist) { it.yellow } * mins
                 out += PlayerWatch(
                     isHome, l.team.ifBlank { if (isHome) home else away }, pl.name, r, 0, 0, 0, 0, 0, 0, false,
                     pFoul = p1(lF), pFouled = p1(lS), pScore = p1(lG), lGoal = lG, lAssist = lA, lFoul = lF, lFouled = lS, lCard = lC,
-                    photo = pl.photo, number = pl.number,
+                    photo = pl.photo, number = pl.number, athleteId = pl.id,
                 )
             }
         }

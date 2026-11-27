@@ -74,6 +74,27 @@ private data class Research(
 
 class MatchDetailViewModel(private val c: AppContainer, private val id: String) : ViewModel() {
     private val extras = MutableStateFlow(DetailExtras())
+
+    // Football players' last games (fouls per game), loaded for the line-ups and the players on the pitch.
+    private val _playerLogs = MutableStateFlow<Map<String, com.matchday.app.domain.PlayerLog>>(emptyMap())
+    val playerLogs: StateFlow<Map<String, com.matchday.app.domain.PlayerLog>> = _playerLogs
+    private val _logsLoading = MutableStateFlow(false)
+    val logsLoading: StateFlow<Boolean> = _logsLoading
+    private val requestedLogs = HashSet<String>()
+
+    /** Loads the game logs of the given players that haven't been asked for yet. */
+    fun ensurePlayerLogs(ids: Collection<String>) {
+        val todo = ids.filter { it.isNotBlank() && requestedLogs.add(it) }
+        if (todo.isEmpty()) return
+        viewModelScope.launch {
+            _logsLoading.value = true
+            val got = withContext(Dispatchers.IO) { runCatching { c.players.logs(todo) }.getOrDefault(emptyMap()) }
+            _playerLogs.value = _playerLogs.value + got
+            com.matchday.app.domain.LiveEngine.playerLogs = _playerLogs.value
+            _logsLoading.value = false
+            item.value?.let { m -> if (m.status == MatchStatus.LIVE) recomputeLive(m, _live.value.stats, failed = false) }
+        }
+    }
     private val history = MutableStateFlow(HistoryState())
     private val oneX = MutableStateFlow<OneXBetState>(OneXBetState.NotLoaded)
     private val ids = MutableStateFlow<Pair<String?, String?>>(null to null)
@@ -233,6 +254,7 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
                     if (_live.value.analysis == null) _live.value = _live.value.copy(loading = true)
                     val st = withContext(Dispatchers.IO) { runCatching { c.matches.liveStats(m) }.getOrNull() }
                     if (st != null) { snapshots.addLast(st); while (snapshots.size > 80) snapshots.removeFirst() }
+                    if (m.competition.sport == SportType.FOOTBALL) st?.footballers?.filter { it.onPitch }?.mapNotNull { it.athleteId }?.let { ensurePlayerLogs(it) }
                     recomputeLive(m, st ?: _live.value.stats, failed = st == null)
                 }
                 kotlinx.coroutines.delay(30_000)

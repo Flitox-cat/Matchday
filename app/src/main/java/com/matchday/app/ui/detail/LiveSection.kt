@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +37,7 @@ import com.matchday.app.ui.theme.Accent
 
 /** Live tab: live stats, Live Match Intelligence, projections and ranked live markets. */
 @Composable
-fun LiveTab(item: MatchItem, live: MatchDetailViewModel.LiveUi, state: DetailUiState) {
+fun LiveTab(item: MatchItem, live: MatchDetailViewModel.LiveUi, state: DetailUiState, vm: MatchDetailViewModel? = null) {
     val zone = LocalZone.current
     if (item.status != MatchStatus.LIVE) {
         EmptyState(
@@ -102,6 +103,11 @@ fun LiveTab(item: MatchItem, live: MatchDetailViewModel.LiveUi, state: DetailUiS
             Text("Source: ESPN live feed.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
         if (a.playerWatch.isNotEmpty()) PlayerWatchCard(a.playerWatch)
+        if (vm != null && a.playerWatch.isNotEmpty()) {
+            val logs by vm.playerLogs.collectAsState()
+            val loadingLogs by vm.logsLoading.collectAsState()
+            PlayerFoulHistoryCard(a.playerWatch, logs, loadingLogs)
+        }
         Banner(a.oddsNote, color = if (a.markets.any { it.odds != null }) Accent.Green else Accent.Orange)
         if (a.markets.firstOrNull()?.family == com.matchday.app.domain.MarketFamily.FIRST_HALF)
             Banner("First half in play: first-half bets (half-time result, 1st-half goals, BTTS...) are listed first, then the full-match bets.", color = Accent.Blue)
@@ -167,6 +173,49 @@ private fun PlayerWatchCard(list: List<com.matchday.app.domain.PlayerWatch>) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                     Text("${p.name} · ${p.role}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 2)
                     listOf(p.pFoul, p.pFouled, p.pScore).forEach { Text(pc(it), style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(52.dp), textAlign = TextAlign.End) }
+                }
+            }
+        }
+    }
+}
+
+/** Every player on the pitch: fouls committed in each of his last 5 games (tap a player for the details). */
+@Composable
+fun PlayerFoulHistoryCard(players: List<com.matchday.app.domain.PlayerWatch>, logs: Map<String, com.matchday.app.domain.PlayerLog>, loading: Boolean) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    InfoCard {
+        Text("Players: fouls in their last 5 games", style = MaterialTheme.typography.titleMedium)
+        Text("Fouls committed per game, most recent first, from the ESPN game log (all games he played this season in his league). " +
+            "Tap a player for opponents, fouls suffered and cards. These records also feed the foul and card chances above.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (loading && logs.isEmpty()) Text("Loading players' last games…", style = MaterialTheme.typography.labelSmall, color = Accent.Purple)
+        for (home in listOf(true, false)) {
+            val team = players.filter { it.home == home }
+            if (team.isEmpty()) continue
+            Spacer(Modifier.height(8.dp))
+            Text(team.first().team, style = MaterialTheme.typography.titleSmall, color = Accent.Blue)
+            team.sortedByDescending { p -> p.athleteId?.let { logs[it]?.avgFouls } ?: -1.0 }.forEach { p ->
+                val log = p.athleteId?.let { logs[it] }
+                Row(Modifier.fillMaxWidth().clickable { open = if (open == p.name) "" else p.name }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${p.name} (${p.role})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 2)
+                        Text(
+                            when {
+                                log != null -> "Last ${log.games.size}: " + log.games.joinToString("  ") { it.fouls.toString() } + "  ·  today ${p.foulsSoFar}"
+                                loading -> "Loading…"
+                                else -> "Data unavailable"
+                            },
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    log?.let { Text(String.format("%.1f / game", it.avgFouls), style = MaterialTheme.typography.labelMedium, color = Accent.Orange) }
+                }
+                if (open == p.name && log != null) {
+                    log.games.forEach { g ->
+                        Text("${Formats.day(g.date, com.matchday.app.ui.LocalZone.current)}  ${g.atVs} ${g.opponent}  ${g.result} ${g.score}  ·  fouls ${g.fouls}, fouled ${g.fouled}" +
+                            (if (g.yellow > 0) ", yellow" else "") + (if (g.red > 0) ", red" else "") + (if (g.goals > 0) ", ${g.goals} goal${if (g.goals > 1) "s" else ""}" else ""),
+                            style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 12.dp, top = 2.dp))
+                    }
                 }
             }
         }

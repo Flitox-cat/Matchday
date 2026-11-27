@@ -155,8 +155,8 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: M
                         Overview(item, prediction, state.extras.notes)
                     }
                 }
-                1 -> item { if (analysed(item)) LiveTab(item, liveUi, state) else NotForSport(item) }
-                2 -> item { if (isFootball(item)) PlayersTab(item, state, liveUi) else NotForSport(item) }
+                1 -> item { if (analysed(item)) LiveTab(item, liveUi, state, vm) else NotForSport(item) }
+                2 -> item { if (isFootball(item)) PlayersTab(item, state, liveUi, vm) else NotForSport(item) }
                 3 -> item { if (analysed(item)) MarketsTab(item, state) else NotForSport(item) }
                 4 -> item { if (isFootball(item)) InsightsTab(item, state) else NotForSport(item) }
                 5 -> item { if (isFootball(item)) TeamComparisonTab(item, state.extras) else NotForSport(item) }

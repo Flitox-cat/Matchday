@@ -30,7 +30,20 @@ data class LiveFootballer(
     val onPitch: Boolean, val subMinute: Int?,          // minute he came on (subs), null for starters
     val foulsCommitted: Int, val foulsSuffered: Int, val shots: Int, val onTarget: Int, val goals: Int,
     val yellow: Int, val red: Int,
+    val athleteId: String? = null,
 )
+
+/** One of a player's recent games (ESPN game log). */
+data class PlayerGame(
+    val date: Long, val opponent: String, val atVs: String, val score: String, val result: String, val league: String,
+    val fouls: Int, val fouled: Int, val yellow: Int, val red: Int, val goals: Int, val shots: Int,
+)
+
+/** A player's last games (most recent first). */
+data class PlayerLog(val athleteId: String, val games: List<PlayerGame>) {
+    val avgFouls: Double get() = if (games.isEmpty()) 0.0 else games.sumOf { it.fouls }.toDouble() / games.size
+    val avgFouled: Double get() = if (games.isEmpty()) 0.0 else games.sumOf { it.fouled }.toDouble() / games.size
+}
 
 /** Rest-of-match chances for one player on the pitch. */
 data class PlayerWatch(
@@ -40,6 +53,7 @@ data class PlayerWatch(
     // Expected counts for the rest of the match (used for the player-market list).
     val lGoal: Double = 0.0, val lAssist: Double = 0.0, val lFoul: Double = 0.0, val lFouled: Double = 0.0, val lCard: Double = 0.0,
     val photo: String? = null, val number: String? = null,
+    val athleteId: String? = null,
 )
 
 data class LiveStats(
@@ -167,6 +181,7 @@ data class LiveStats(
                         subMinute = if (sIn) subMinutes[name] else null,
                         foulsCommitted = n("foulsCommitted"), foulsSuffered = n("foulsSuffered"), shots = n("totalShots"),
                         onTarget = n("shotsOnTarget"), goals = n("totalGoals"), yellow = n("yellowCards"), red = n("redCards"),
+                        athleteId = p["athlete"].obj()?.get("id").str(),
                     )
                 }
             }
@@ -248,6 +263,9 @@ object LiveEngine {
         }
     }
 
+    /** Players' recent game logs (fouls per game), set by the match page when loaded. */
+    @Volatile var playerLogs: Map<String, PlayerLog> = emptyMap()
+
     fun analyze(item: MatchItem, s: LiveStats?, prior: LivePrior, livePrices: List<BookPrice>?, priceSource: String?, previous: List<LiveStats>): LiveAnalysis? {
         val hs = item.homeScore?.trim()?.toIntOrNull() ?: s?.homeLines?.sum()
         val asc = item.awayScore?.trim()?.toIntOrNull() ?: s?.awayLines?.sum()
@@ -275,7 +293,7 @@ object LiveEngine {
     private fun playerWatch(s: LiveStats?, minute: Double, remaining: Double, lh: Double, la: Double): List<PlayerWatch> {
         val fs = s?.footballers?.filter { it.onPitch } ?: return emptyList()
         if (fs.isEmpty()) return emptyList()
-        return PlayerModel.live(s.footballers, minute, remaining, lh, la)
+        return PlayerModel.live(s.footballers, minute, remaining, lh, la, playerLogs)
     }
 
     /** Football minute from the status text ("67'", "45'+2'", "HT"). */

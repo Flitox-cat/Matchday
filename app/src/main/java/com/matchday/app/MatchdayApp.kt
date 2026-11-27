@@ -25,6 +25,7 @@ class AppContainer(context: Context) {
     val matches = MatchRepository(db, settings, weather, cache)
     val teams = TeamRepository(db, cache)
     val tennis = com.matchday.app.data.repo.TennisRepository(cache, teams)
+    val players = com.matchday.app.data.repo.PlayerRepository(cache)
     val oneXBet = OneXBetRepository(cache, settings).also { ox -> matches.tennisOddsProvider = { ox.tennisMatchOdds() } }
     val dailyPicks = com.matchday.app.data.repo.DailyPicksRepository(context, matches, oneXBet, teams, tennis).also { dp ->
         matches.onFinished = { finished -> dp.settle(finished) }

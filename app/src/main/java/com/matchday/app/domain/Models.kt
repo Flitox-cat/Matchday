@@ -159,6 +159,7 @@ data class LineupPlayer(
     val photo: String? = null,
     val grid: String? = null,
     val order: Int? = null,
+    val id: String? = null,          // ESPN athlete id
 )
 
 data class LineupInfo(

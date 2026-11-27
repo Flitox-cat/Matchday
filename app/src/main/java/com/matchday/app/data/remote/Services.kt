@@ -46,6 +46,10 @@ interface EspnService {
         @Query("fixture") fixture: Boolean? = null,
     ): ESchedule
 
+    /** A football player's games this season with his fouls, cards, shots and goals per game. */
+    @GET("https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/{id}/gamelog")
+    suspend fun soccerGamelog(@Path("id") id: String): kotlinx.serialization.json.JsonObject
+
     @GET("apis/site/v2/sports/tennis/{tour}/rankings")
     suspend fun tennisRankings(@Path("tour") tour: String): kotlinx.serialization.json.JsonObject
 
