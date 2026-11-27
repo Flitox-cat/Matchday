@@ -223,8 +223,8 @@ class PickTracker(private val cache: JsonCache) {
         val detail = (item.statusDetail ?: "").uppercase()
         val sport = item.competition.sport.name
         // Football markets are settled on 90 minutes: a match decided in extra time or on penalties can't be settled from the final score.
-        val extraTime = sport == "FOOTBALL" && (detail.contains("AET") || detail.contains("PEN") || detail.contains("ET"))
-        val ot = detail.contains("OT") || detail.contains("SO")
+        val extraTime = sport == "FOOTBALL" && Regex("\\bAET\\b|PEN|\\bET\\b|EXTRA").containsMatchIn(detail)
+        val ot = Regex("\\bOT\\b|\\bSO\\b|/OT|/SO|OVERTIME|SHOOTOUT").containsMatchIn(detail)
         val recKeys = tracked.map { "${it.market}|${it.sel}|${it.point}" }.toSet()
         val picks = snap?.picks ?: tracked.map { SnapPick(it.family, it.market, it.sel, it.point, it.label, it.probability, it.odds) }
         return picks.distinctBy { "${it.market}|${it.sel}|${it.point}" }.map { p ->
