@@ -31,13 +31,16 @@ jobs:
           {
           curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/357145/gamelog" | python3 -c "
           import sys,json
-          d=json.load(sys.stdin)
-          e=list(d['events'].values())[0]; print('event keys', list(e.keys())); print(json.dumps(e)[:600])
-          st=d['seasonTypes']; print('seasonTypes', len(st), list(st[0].keys()), st[0].get('displayName'))
-          c=st[0]['categories']; print('cats', len(c), list(c[0].keys()), c[0].get('displayName'))
-          print(json.dumps(c[0]['events'][:2])[:500])
-          print('total events', sum(len(cc.get('events',[])) for s2 in st for cc in s2['categories']))
-          print('filters', json.dumps(d.get('filters'))[:300])
+          d=json.load(sys.stdin); names=d['names']
+          ev=d['events']
+          rows=[]
+          for st in d['seasonTypes']:
+              for c in st['categories']:
+                  for e in c['events']:
+                      m=ev.get(e['eventId'],{})
+                      rows.append((m.get('gameDate'), m.get('atVs'), (m.get('opponent') or {}).get('displayName'), m.get('gameResult'), m.get('score'), dict(zip(names,e['stats']))['foulsCommitted'], dict(zip(names,e['stats']))['foulsSuffered'], m.get('leagueShortName')))
+          rows.sort(reverse=True)
+          for r in rows[:5]: print(r)
           "
           } > probe_out.txt 2>&1
           cat probe_out.txt
