@@ -29,26 +29,16 @@ jobs:
           g() { curl -s --compressed -m 30 "$1"; }
           S=https://site.api.espn.com/apis/site/v2/sports/soccer
           {
-          curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20261122" > /tmp/b.json
-          id=$(python3 -c "
-          import json; d=json.load(open('/tmp/b.json')); print(d['events'][0]['id'])")
-          curl -s --compressed -m 25 "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=$id" > /tmp/s.json
-          python3 -c "
-          import json; d=json.load(open('/tmp/s.json'))
-          lf=d.get('lastFiveGames') or []
-          print('lastFive event keys', list((lf[0]['events'][0]).keys()) if lf and lf[0].get('events') else None)
-          if lf: print([ (e.get('id'), e.get('leagueAbbreviation'), e.get('league'), e.get('gameDate')) for e in lf[0]['events'][:5]])
-          r=d['rosters'][0]['roster'][3]; print('athlete', r['athlete'].get('id'), r['athlete'].get('displayName'))
-          open('/tmp/ath','w').write(r['athlete']['id']); open('/tmp/ev','w').write(lf[0]['events'][1]['id'] if lf else '')"
-          ath=$(cat /tmp/ath); ev=$(cat /tmp/ev)
-          for U in "https://site.web.api.espn.com/apis/common/v3/sports/soccer/eng.1/athletes/$ath/gamelog" "https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/$ath/gamelog" "https://site.web.api.espn.com/apis/common/v3/sports/soccer/eng.1/athletes/$ath/overview" "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=$ev" "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=$ev"; do
-            printf "== %s\n" "$U"
-            curl -s --compressed -m 25 -A "Matchday-Android/2.0" "$U" | python3 -c "
+          curl -s --compressed -m 25 -A "Matchday-Android/2.0" "https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/357145/gamelog" | python3 -c "
           import sys,json
-          try:
-              d=json.load(sys.stdin); print(list(d.keys())[:15]); s=json.dumps(d); i=s.find('oul'); print(s[max(0,i-300):i+300] if i>=0 else s[:300])
-          except Exception as e: print('ERR',e)"
-          done
+          d=json.load(sys.stdin)
+          e=list(d['events'].values())[0]; print('event keys', list(e.keys())); print(json.dumps(e)[:600])
+          st=d['seasonTypes']; print('seasonTypes', len(st), list(st[0].keys()), st[0].get('displayName'))
+          c=st[0]['categories']; print('cats', len(c), list(c[0].keys()), c[0].get('displayName'))
+          print(json.dumps(c[0]['events'][:2])[:500])
+          print('total events', sum(len(cc.get('events',[])) for s2 in st for cc in s2['categories']))
+          print('filters', json.dumps(d.get('filters'))[:300])
+          "
           } > probe_out.txt 2>&1
           cat probe_out.txt
           git config user.name Matchday; git config user.email matchday@users.noreply.github.com
