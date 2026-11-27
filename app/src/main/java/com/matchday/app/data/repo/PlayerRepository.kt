@@ -61,7 +61,10 @@ class PlayerRepository(private val cache: JsonCache) {
             val stats = a(e["stats"]).map { s(it)?.toDoubleOrNull()?.toInt() ?: 0 }
             fun v(i: Int) = if (i >= 0) stats.getOrElse(i) { 0 } else 0
             val m = o(meta[id])
-            val date = runCatching { java.time.Instant.parse(s(m?.get("gameDate"))!!.let { if (it.length == 17) it.replace("Z", ":00Z") else it }).toEpochMilli() }.getOrNull() ?: continue
+            val ds = s(m?.get("gameDate")) ?: continue
+            // "2026-11-22T14:00:00.000+00:00" or "2026-10-11T13:00Z"
+            val date = runCatching { java.time.OffsetDateTime.parse(ds).toInstant().toEpochMilli() }
+                .recoverCatching { java.time.Instant.parse(if (ds.length == 17) ds.replace("Z", ":00Z") else ds).toEpochMilli() }.getOrNull() ?: continue
             out += G(
                 date, s(o(m?.get("opponent"))?.get("displayName")) ?: "?", s(m?.get("atVs")) ?: "vs", s(m?.get("score")) ?: "",
                 s(m?.get("gameResult")) ?: "", s(m?.get("leagueShortName")) ?: s(m?.get("leagueName")) ?: "",
