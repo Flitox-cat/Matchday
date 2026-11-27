@@ -75,6 +75,10 @@ private data class Research(
 class MatchDetailViewModel(private val c: AppContainer, private val id: String) : ViewModel() {
     private val extras = MutableStateFlow(DetailExtras())
 
+    // Finished match: the predictions saved before kick-off and how each ended.
+    private val _results = MutableStateFlow<List<com.matchday.app.data.repo.SettledPrediction>?>(null)
+    val results: StateFlow<List<com.matchday.app.data.repo.SettledPrediction>?> = _results
+
     // Football players' last games (fouls per game), loaded for the line-ups and the players on the pitch.
     private val _playerLogs = MutableStateFlow<Map<String, com.matchday.app.domain.PlayerLog>>(emptyMap())
     val playerLogs: StateFlow<Map<String, com.matchday.app.domain.PlayerLog>> = _playerLogs
@@ -144,6 +148,18 @@ class MatchDetailViewModel(private val c: AppContainer, private val id: String) 
             state.map { st -> st.item to st.markets?.top.orEmpty() }
                 .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second.map { it.key } == b.second.map { it.key } && a.second.map { it.probability } == b.second.map { it.probability } }
                 .collect { (i, top) -> if (i != null && top.isNotEmpty()) runCatching { c.matches.tracker.record(i, top, "match") } }
+        }
+        // Save the full prediction list before kick-off; once finished, settle it.
+        viewModelScope.launch {
+            state.map { st -> st.item to st.markets?.markets.orEmpty() }
+                .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second.size == b.second.size && a.second.firstOrNull()?.probability == b.second.firstOrNull()?.probability }
+                .collect { (i, ms) -> if (i != null && i.status == MatchStatus.UPCOMING && ms.isNotEmpty()) runCatching { c.matches.tracker.snapshot(i, ms) } }
+        }
+        viewModelScope.launch {
+            item.map { it?.let { i -> Triple(i.id, i.status, i.homeScore + "-" + i.awayScore) } }.distinctUntilChanged().collect {
+                val i = item.value ?: return@collect
+                if (i.status == MatchStatus.FINISHED) _results.value = withContext(Dispatchers.IO) { runCatching { c.matches.tracker.results(i) }.getOrNull() }
+            }
         }
     }
 

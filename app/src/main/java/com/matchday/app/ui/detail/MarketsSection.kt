@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -251,5 +252,60 @@ private fun AllMarketsCard(a: MarketAnalysis) {
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 4.dp))
         }
+    }
+}
+
+/** Finished match: every prediction saved before kick-off, marked correct, failed or void. */
+@Composable
+fun PredictionResultsCard(item: MatchItem, res: List<com.matchday.app.data.repo.SettledPrediction>?) {
+    val W = com.matchday.app.data.repo.PickTracker.Outcome.WIN
+    val L = com.matchday.app.data.repo.PickTracker.Outcome.LOSS
+    var filter by androidx.compose.runtime.saveable.rememberSaveable(item.id) { androidx.compose.runtime.mutableStateOf("All") }
+    InfoCard {
+        Text("Prediction results", style = MaterialTheme.typography.titleMedium)
+        if (res == null) {
+            Text("No predictions were saved for this match before kick-off (it wasn't opened or analysed in Daily Picks before it started).",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@InfoCard
+        }
+        val won = res.filter { it.outcome == W }; val lost = res.filter { it.outcome == L }
+        val other = res.size - won.size - lost.size
+        Text("Final score ${item.homeTeam} ${item.homeScore} – ${item.awayScore} ${item.awayTeam}", style = MaterialTheme.typography.bodySmall)
+        Text("✅ ${won.size} correct   ❌ ${lost.size} failed" + (if (other > 0) "   ➖ $other void / can't be settled" else ""),
+            style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
+        val strong = res.filter { it.pick.probability >= 0.6 && (it.outcome == W || it.outcome == L) }
+        if (strong.isNotEmpty()) Text("Predictions of 60%+: ${strong.count { it.outcome == W }} of ${strong.size} correct", style = MaterialTheme.typography.labelSmall, color = Accent.Purple)
+        val rec = res.filter { it.recommended }
+        if (rec.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("★ Recommended before kick-off", style = MaterialTheme.typography.titleSmall)
+            rec.sortedByDescending { it.pick.probability }.forEach { ResultRow(it) }
+        }
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            items(listOf("All", "Correct", "Failed")) { f ->
+                androidx.compose.material3.FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f) })
+            }
+        }
+        res.filter { when (filter) { "Correct" -> it.outcome == W; "Failed" -> it.outcome == L; else -> true } }
+            .sortedByDescending { it.pick.probability }.forEach { ResultRow(it) }
+        Text("Predictions as they stood before kick-off (chance and the real price at that time). Football is settled on 90 minutes; " +
+            "markets that need data the free feed doesn't keep (corners, first scorer, quarters) are marked ➖.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun ResultRow(r: com.matchday.app.data.repo.SettledPrediction) {
+    val icon = when (r.outcome) {
+        com.matchday.app.data.repo.PickTracker.Outcome.WIN -> "✅"
+        com.matchday.app.data.repo.PickTracker.Outcome.LOSS -> "❌"
+        else -> "➖"
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(icon, modifier = Modifier.padding(end = 8.dp))
+        Text(r.pick.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 3)
+        Text("${Math.round(r.pick.probability * 100)}%" + (r.pick.odds?.let { " @ " + String.format("%.2f", it) } ?: ""),
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

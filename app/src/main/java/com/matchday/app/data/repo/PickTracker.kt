@@ -34,6 +34,19 @@ data class TrackedPick(
     val base: Double? = null,          // probability before the self-correcting layer
 )
 
+/** One prediction saved before kick-off (every market of the analysis, not only the recommended ones). */
+@Serializable
+data class SnapPick(
+    val family: String, val market: String, val sel: String, val point: Double? = null, val label: String,
+    val probability: Double, val odds: Double? = null, val bookmaker: String? = null,
+)
+
+@Serializable
+data class MatchSnapshot(val matchId: String, val kickoff: Long, val sport: String, val createdAt: Long, val picks: List<SnapPick>)
+
+/** A saved prediction and how it ended. */
+data class SettledPrediction(val pick: SnapPick, val outcome: PickTracker.Outcome, val recommended: Boolean)
+
 /** Accuracy figures for one category. */
 data class AccuracyRow(val category: String, val settled: Int, val won: Int, val avgPredicted: Double) {
     val hitRate: Double get() = if (settled == 0) 0.0 else won.toDouble() / settled
@@ -63,6 +76,32 @@ class PickTracker(private val cache: JsonCache) {
     companion object {
         const val KEY = "track:picks"
         const val HT_KEY = "ht:scores"
+        private const val SNAP_INDEX = "snap:index"
+
+        /**
+         * Result of a selection in any sport from the final score. Hockey regulation markets use [ot]
+         * (the game went to overtime/shootout, so it was tied after 60 minutes). Tennis scores are sets.
+         */
+        fun outcomeAny(sport: String, m: String, sel: String, pt: Double?, hg: Int, ag: Int, hh: Int?, ha: Int?, ot: Boolean): Outcome {
+            if (sport == "FOOTBALL") return outcomeOf(m, sel, pt, hg, ag, hh, ha)
+            fun b(x: Boolean) = if (x) Outcome.WIN else Outcome.LOSS
+            val tennis = sport == "TENNIS"
+            val rh = if (sport == "HOCKEY" && ot) minOf(hg, ag) else hg
+            val ra = if (sport == "HOCKEY" && ot) minOf(hg, ag) else ag
+            return when (m) {
+                "ML" -> b(if (sel == "HOME") hg > ag else ag > hg)
+                "SPR" -> if (tennis) Outcome.UNKNOWN else pt?.let { val d = (if (sel == "HOME") hg - ag else ag - hg) + it; if (d > 0) Outcome.WIN else if (d == 0.0) Outcome.VOID else Outcome.LOSS } ?: Outcome.UNKNOWN
+                "TOT" -> if (tennis) Outcome.UNKNOWN else pt?.let { if (hg + ag == it.toInt() && it % 1.0 == 0.0) Outcome.VOID else b(if (sel == "OVER") hg + ag > it else hg + ag < it) } ?: Outcome.UNKNOWN
+                "TT" -> if (tennis) Outcome.UNKNOWN else pt?.let { p -> when (sel) { "HOME_OVER" -> b(hg > p); "HOME_UNDER" -> b(hg < p); "AWAY_OVER" -> b(ag > p); "AWAY_UNDER" -> b(ag < p); else -> Outcome.UNKNOWN } } ?: Outcome.UNKNOWN
+                "REG" -> if (sport != "HOCKEY") Outcome.UNKNOWN else b(when (sel) { "HOME" -> rh > ra; "AWAY" -> ra > rh; else -> rh == ra })
+                "DC" -> if (sport != "HOCKEY") Outcome.UNKNOWN else b(when (sel) { "1X" -> rh >= ra; "X2" -> ra >= rh; else -> rh != ra })
+                "BTTS" -> if (sport != "HOCKEY") Outcome.UNKNOWN else b((rh > 0 && ra > 0) == (sel == "YES"))
+                "SETS" -> if (tennis) b(if (sel == "2") hg + ag == 2 else hg + ag == 3) else Outcome.UNKNOWN
+                "CSS" -> if (tennis) b("$hg-$ag" == sel) else Outcome.UNKNOWN
+                "SETHC" -> if (tennis) b(if (sel == "HOME") !(ag == 2 && hg == 0) else !(hg == 2 && ag == 0)) else Outcome.UNKNOWN
+                else -> Outcome.UNKNOWN   // period, quarter and game markets need data the free feed doesn't keep
+            }
+        }
 
         fun category(family: String, market: String): String = when {
             market == "1X2" -> "Match winners"
@@ -145,6 +184,52 @@ class PickTracker(private val cache: JsonCache) {
             cache.put(KEY, ser, cur.sortedByDescending { it.kickoff }.take(3000))
         } finally {
             lock.unlock()
+        }
+    }
+
+    private val snapSer = MatchSnapshot.serializer()
+    private val indexSer = MapSerializer(String.serializer(), kotlin.Long.serializer())
+    private val snapLock = kotlinx.coroutines.sync.Mutex()
+
+    /** Saves every market of a pre-match analysis (until kick-off), to show afterwards which ones came true. */
+    suspend fun snapshot(item: MatchItem, markets: List<MarketPick>) {
+        val now = System.currentTimeMillis()
+        if (markets.isEmpty() || now >= item.kickoff) return
+        val picks = markets.filter { it.probability in 0.03..0.98 }.sortedByDescending { it.probability }.take(80).map {
+            SnapPick(it.family.name, it.market, it.sel, it.point, it.label, it.probability, it.odds, it.bookmaker)
+        }
+        runCatching { cache.put("snap:${item.id}", snapSer, MatchSnapshot(item.id, item.kickoff, item.competition.sport.name, now, picks)) }
+        snapLock.lock()
+        try {
+            val idx = runCatching { cache.peek(SNAP_INDEX, indexSer) }.getOrNull().orEmpty().toMutableMap()
+            idx[item.id] = item.kickoff
+            // Keep three weeks of finished matches; older snapshots are emptied.
+            val old = idx.filterValues { it < now - 21L * 24 * 3_600_000 }.keys
+            old.forEach { runCatching { cache.expire("snap:$it") }; idx.remove(it) }
+            cache.put(SNAP_INDEX, indexSer, idx)
+        } finally {
+            snapLock.unlock()
+        }
+    }
+
+    /** The saved predictions of a finished match, each with its result. */
+    suspend fun results(item: MatchItem): List<SettledPrediction>? {
+        val snap = runCatching { cache.peek("snap:${item.id}", snapSer) }.getOrNull()
+        val tracked = all().filter { it.matchId == item.id }
+        if (snap == null && tracked.isEmpty()) return null
+        val hg = item.homeScore?.trim()?.toIntOrNull() ?: return null
+        val ag = item.awayScore?.trim()?.toIntOrNull() ?: return null
+        val half = runCatching { cache.peek(HT_KEY, htSer) }.getOrNull()?.get(item.id)?.split("-")?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 2 }
+        val detail = (item.statusDetail ?: "").uppercase()
+        val sport = item.competition.sport.name
+        // Football markets are settled on 90 minutes: a match decided in extra time or on penalties can't be settled from the final score.
+        val extraTime = sport == "FOOTBALL" && (detail.contains("AET") || detail.contains("PEN") || detail.contains("ET"))
+        val ot = detail.contains("OT") || detail.contains("SO")
+        val recKeys = tracked.map { "${it.market}|${it.sel}|${it.point}" }.toSet()
+        val picks = snap?.picks ?: tracked.map { SnapPick(it.family, it.market, it.sel, it.point, it.label, it.probability, it.odds) }
+        return picks.distinctBy { "${it.market}|${it.sel}|${it.point}" }.map { p ->
+            val o = if (extraTime) Outcome.UNKNOWN else outcomeAny(sport, p.market, p.sel, p.point, hg, ag, half?.get(0), half?.get(1), ot)
+            SettledPrediction(p, o, "${p.market}|${p.sel}|${p.point}" in recKeys)
         }
     }
 

@@ -206,6 +206,9 @@ class DailyPicksRepository(
             }.awaitAll()
         }
         val otherAnalysed = if (others.isEmpty()) emptyList() else otherSports(others)
+        // Save every analysed match's predictions, to show after the match which came true.
+        analysed.forEach { (m, a) -> a?.markets?.markets?.let { runCatching { matches.tracker.snapshot(m, it) } } }
+        otherAnalysed.forEach { (m, a, _) -> a?.markets?.let { runCatching { matches.tracker.snapshot(m, it) } } }
 
         // Risk filter, in three levels. Strict picks always come first; the relaxed levels are only used
         // when the strict filter leaves too few matches to fill a slip.

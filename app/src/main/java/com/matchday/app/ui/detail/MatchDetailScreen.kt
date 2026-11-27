@@ -37,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -148,6 +149,10 @@ private fun DetailBody(vm: MatchDetailViewModel, state: DetailUiState, liveUi: M
             when (tab) {
                 0 -> item {
                     Column {
+                        if (item.status == MatchStatus.FINISHED) {
+                            val res by vm.results.collectAsState()
+                            PredictionResultsCard(item, res)
+                        }
                         state.markets?.let { if (analysed(item) && item.status == MatchStatus.UPCOMING) ScoreCard(item, it) }
                         state.markets?.let { if (analysed(item)) TopSelectionsCard(item, it, state.insights, compact = true) }
                         if (isFootball(item)) VerdictCard(item, state)
