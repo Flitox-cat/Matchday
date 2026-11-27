@@ -1,7 +1,5 @@
-event keys ['id', 'links', 'atVs', 'gameDate', 'score', 'homeTeamId', 'awayTeamId', 'homeTeamScore', 'awayTeamScore', 'gameResult', 'opponent', 'leagueName', 'leagueAbbreviation', 'leagueShortName', 'team']
-{"id": "401879234", "links": [{"language": "en", "rel": ["summary", "desktop", "event"], "href": "https://www.espn.com/football/match/_/gameId/401879234/brighton-hove-albion-hull-city", "text": "Summary", "shortText": "Summary", "isExternal": false, "isPremium": false}, {"language": "en", "rel": ["summary", "mobile", "event"], "href": "https://m.espn.com/soccer/match?gameId=401879234&action=summary", "text": "Summary", "shortText": "Summary", "isExternal": false, "isPremium": false}, {"language": "en", "rel": ["summary", "sportscenter", "app", "event"], "href": "sportscenter://x-callback-url/s
-seasonTypes 1 ['displayName', 'categories'] 2026-27 English Premier League
-cats 1 ['displayName', 'type', 'splitType', 'events'] 2026-27 English Premier League Stats
-[{"eventId": "401879234", "stats": ["0", "0", "0", "0", "0", "0", "0", "0", "0"]}, {"eventId": "401878760", "stats": ["0", "0", "2", "1", "3", "0", "0", "1", "0"]}]
-total events 11
-filters [{"displayName": "Season", "name": "season", "value": "2026", "options": [{"value": "2026", "displayValue": "2026-27"}]}, {"displayName": "Team", "name": "team", "value": "306", "options": [{"value": "306", "displayValue": "Hull City"}, {"value": "20301", "displayValue": "Mj\u00e4llby AIF"}, {"value
+('2026-11-22T14:00:00.000+00:00', 'vs', 'Brighton & Hove Albion', 'W', '2-0', '0', '0', 'Premier League')
+('2026-11-07T15:00:00.000+00:00', '@', 'Arsenal', 'L', '1-0', '3', '0', 'Premier League')
+('2026-10-31T15:00:00.000+00:00', 'vs', 'Ipswich Town', 'D', '2-2', '1', '0', 'Premier League')
+('2026-10-25T14:00:00.000+00:00', 'vs', 'Brentford', 'D', '1-1', '0', '1', 'Premier League')
+('2026-10-17T14:00:00.000+00:00', '@', 'Fulham', 'L', '1-0', '0', '0', 'Premier League')
